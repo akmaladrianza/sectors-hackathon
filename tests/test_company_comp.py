@@ -1,0 +1,157 @@
+"""Tests for the :class:`CompanyComp` model, focusing on missing-data behavior.
+
+Run:  python tests/test_company_comp.py
+"""
+
+from decimal import Decimal
+
+from pydantic import ValidationError
+
+from models.company_comp import CompanyComp, Currency
+
+
+def assert_close(actual, expected, tol=1e-6):
+    assert abs(actual - expected) < tol, f"{actual} != {expected}"
+
+
+def main():
+    # 1. Full data: everything computes.
+    full = CompanyComp(
+        ticker="BBCA.JK",
+        company_name="PT Bank Central Asia Tbk",
+        sector="Financials",
+        market_cap=Decimal("1000"),
+        total_debt=Decimal("300"),
+        cash_and_equivalents=Decimal("100"),
+        revenue=Decimal("500"),
+        ebitda=Decimal("200"),
+        eps=Decimal("2"),
+        price=Decimal("20"),
+        total_assets=Decimal("900"),
+        net_income=Decimal("150"),
+    )
+    assert full.enterprise_value == Decimal("1200"), full.enterprise_value
+    assert_close(full.ev_to_ebitda, 6.0)
+    assert_close(full.ev_to_revenue, 2.4)
+    assert_close(full.pe_ratio, 10.0)
+    assert_close(full.price_to_book, 1000 / 900)
+    assert full.is_screenable is True
+    assert full.exclusion_reasons == []
+    print("PASS full-data case")
+
+    # 2. Missing market_cap: multiples -> None, no crash, not screenable.
+    no_cap = CompanyComp(
+        ticker="MISSING.JK",
+        company_name="No Market Cap Co",
+        sector="Financials",
+        total_debt=Decimal("300"),
+        cash_and_equivalents=Decimal("100"),
+        revenue=Decimal("500"),
+        ebitda=Decimal("200"),
+    )
+    assert no_cap.market_cap is None
+    assert no_cap.enterprise_value is None
+    assert no_cap.ev_to_ebitda is None
+    assert no_cap.ev_to_revenue is None
+    assert no_cap.price_to_book is None
+    assert no_cap.pe_ratio is None
+    assert no_cap.is_screenable is False  # surfaced, not silently dropped
+    assert no_cap.exclusion_reasons == ["missing market_cap"]
+    print("PASS missing-market-cap case (graceful None, not screened)")
+
+    # 3. market_cap backfilled from price * shares_outstanding.
+    backfill = CompanyComp(
+        ticker="BACKFILL.JK",
+        company_name="Backfilled Co",
+        sector="Industrials",
+        price=Decimal("15"),
+        shares_outstanding=Decimal("40"),
+        ebitda=Decimal("100"),
+    )
+    assert backfill.market_cap == Decimal("600"), backfill.market_cap
+    assert backfill.is_screenable is True
+    print("PASS backfill case (market_cap = 600)")
+
+    # 4. market_cap present but missing ebitda -> still not screenable, no crash.
+    no_ebitda = CompanyComp(
+        ticker="NOEBITDA.JK",
+        company_name="No EBITDA Co",
+        sector="Utilities",
+        market_cap=Decimal("1000"),
+        revenue=Decimal("500"),
+    )
+    assert no_ebitda.is_screenable is False
+    assert no_ebitda.exclusion_reasons == ["missing ebitda"]
+    assert no_ebitda.ev_to_ebitda is None
+    assert_close(no_ebitda.ev_to_revenue, 1000 / 500)
+    print("PASS missing-ebitda case (EV/Rev still computes)")
+
+    # 5. zero ebitda must not divide-by-zero.
+    zero_ebitda = CompanyComp(
+        ticker="ZERO.JK",
+        company_name="Zero EBITDA Co",
+        sector="Tech",
+        market_cap=Decimal("1000"),
+        ebitda=Decimal("0"),
+    )
+    assert zero_ebitda.ev_to_ebitda is None
+    assert zero_ebitda.is_screenable is False
+    assert zero_ebitda.exclusion_reasons == ["non-positive ebitda"]
+    print("PASS zero-ebitda case (no div-by-zero)")
+
+    # 6. screenable partition helper demonstration.
+    rows = [full, no_cap, backfill, no_ebitda, zero_ebitda]
+    usable = [r for r in rows if r.is_screenable]
+    excluded = [r for r in rows if not r.is_screenable]
+    assert len(usable) == 2  # full, backfill
+    assert len(excluded) == 3  # no_cap, no_ebitda, zero_ebitda
+    print(
+        f"PASS screening partition: {len(usable)} usable, "
+        f"{len(excluded)} excluded-for-data"
+    )
+
+    # 7. Serialization: JSON mode emits floats for Decimal computed fields.
+    dumped = full.model_dump(mode="json")
+    assert "enterprise_value" in dumped
+    assert isinstance(dumped["enterprise_value"], float)
+    assert dumped["ev_to_ebitda"] == 6.0
+    print("PASS serialization (computed fields present, decimals as floats)")
+
+    # 8. Validation: negative values on non-negative financial fields are rejected.
+    for bad_params in [
+        {"market_cap": Decimal("-1000")},
+        {"price": Decimal("-5")},
+        {"shares_outstanding": Decimal("-1")},
+        {"revenue": Decimal("-500")},
+        {"total_assets": Decimal("-1")},
+        {"cash_and_equivalents": Decimal("-1")},
+    ]:
+        try:
+            CompanyComp(
+                ticker="BAD.JK", company_name="Bad Co", sector="X", **bad_params
+            )
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError(f"Expected ValidationError for {bad_params}")
+    print("PASS validation: negative values rejected")
+
+    # 9. Validation: empty-string identifiers are rejected.
+    for kwargs in [
+        {"ticker": "", "company_name": "X", "sector": "X"},
+        {"ticker": "A", "company_name": "", "sector": "X"},
+        {"ticker": "A", "company_name": "X", "sector": ""},
+    ]:
+        try:
+            CompanyComp(**kwargs)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError(f"Expected ValidationError for {kwargs}")
+    print("PASS validation: empty-string identifiers rejected")
+
+    print("\nALL TESTS PASSED")
+
+
+if __name__ == "__main__":
+    main()
