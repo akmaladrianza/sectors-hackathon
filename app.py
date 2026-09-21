@@ -32,9 +32,9 @@ CACHE_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "sec
 
 st.set_page_config(page_title="Mimir — Comps Screener", layout="wide")
 st.title("Mimir")
-st.caption("Comparable-company analysis + mining overlay (Simple mode)")
+st.caption("Comparable-company analysis + mining overlay")
 
-# --- Sidebar: inputs ------------------------------------------------------
+# --- Sidebar: inputs (defined first so `run` is available to the intro) -----
 st.sidebar.header("Screener")
 tickers_input = st.sidebar.text_area(
     "Tickers (comma-separated)",
@@ -50,6 +50,24 @@ st.sidebar.markdown(
     "**Disclaimer**: informational analysis tool, not financial advice. "
     "Data sourced from the Sectors API; reserve figures are company self-reported."
 )
+
+# --- How to use (first-load intro, expandable) -----------------------------
+with st.expander("ℹ️ How to use this", expanded=not run):
+    st.markdown(
+        "1. **Enter tickers** in the sidebar (e.g. `BBCA, TLKM, ASII, UNVR, MDKA`), "
+        "one per line or comma-separated.\n"
+        "2. Click **Run screener**.\n"
+        "3. Read the **Comparable companies** table (EV/EBITDA, EV/Revenue, P/E, P/B), "
+        "the **Mining overlay** panel (reserve-adjusted metrics), and the **Excluded** "
+        "panel (companies that can't be fairly compared, with the reason why).\n"
+        "4. Toggle **Advanced mode** to see and edit DCF assumptions.\n"
+        "5. **Download .xlsx** to export."
+    )
+    st.caption(
+        "Mining overlay currently only covers **MDKA** and **ADRO** (hardcoded seed "
+        "miners); other miners are shown as generic comps. Data from Sectors API; "
+        "reserve figures are company self-reported, not independently audited."
+    )
 
 if run:
     tickers = [t.strip() for t in tickers_input.split(",") if t.strip()]
