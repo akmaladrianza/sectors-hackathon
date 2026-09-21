@@ -1,0 +1,116 @@
+{
+  "year": 2024,
+  "available_years": [
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "data": [
+    {
+      "year": 2024,
+      "commodity_type": "Coal",
+      "commodity_sub_type": "Sub-bituminous & Metallurgical Coal",
+      "commodity_stats": {
+        "unit": "Mt",
+        "mining_operation_status": "production",
+        "production_volume": 64.64,
+        "sales_volume": 71.36,
+        "overburden_removal_volume": 252.94,
+        "strip_ratio": 3.9,
+        "resources_reserves": {
+          "measurement_year": 2024,
+          "probable_reserves_Mt": 439.5,
+          "proven_reserves_Mt": 556.7,
+          "total_reserves_Mt": 996.2,
+          "inferred_resources_Mt": 1066.6,
+          "indicated_resources_Mt": 1320.8,
+          "measured_resources_Mt": 3374.1,
+          "total_resources_Mt": 5356.9
+        },
+        "products": [
+          {
+            "product_name": "Envirocoal -North Tutupan",
+            "calorific_value_kcal": {
+              "max": 4843.0,
+              "min": 4843.0
+            },
+            "total_moisture_pct": {
+              "max": 27.1,
+              "min": 27.1
+            },
+            "ash_content_arb": null,
+            "total_sulphur_arb": null,
+            "ash_content_adb": {
+              "max": 2.1,
+              "min": 2.1
+            },
+            "total_sulphur_adb": {
+              "max": 0.1,
+              "min": 0.1
+            },
+            "volatile_matter_adb": {
+              "max": 39.7,
+              "min": 39.7
+            },
+            "fixed_carbon_adb": null
+          },
+          {
+            "product_name": "Envirocoal - South Tutupan",
+            "calorific_value_kcal": {
+              "max": 5005.0,
+              "min": 5005.0
+            },
+            "total_moisture_pct": {
+              "max": 27.3,
+              "min": 27.3
+            },
+            "ash_content_arb": null,
+            "total_sulphur_arb": null,
+            "ash_content_adb": {
+              "max": 2.1,
+              "min": 2.1
+            },
+            "total_sulphur_adb": {
+              "max": 0.1,
+              "min": 0.1
+            },
+            "volatile_matter_adb": {
+              "max": 40.6,
+              "min": 40.6
+            },
+            "fixed_carbon_adb": null
+          },
+          {
+            "product_name": "Envirocoal - Wara I",
+            "calorific_value_kcal": {
+              "max": 3994.0,
+              "min": 3994.0
+            },
+            "total_moisture_pct": {
+              "max": 39.1,
+              "min": 39.1
+            },
+            "ash_content_arb": null,
+            "total_sulphur_arb": null,
+            "ash_content_adb": {
+              "max": 3.4,
+              "min": 3.4
+            },
+            "total_sulphur_adb": {
+              "max": 0.3,
+              "min": 0.3
+            },
+            "volatile_matter_adb": {
+              "max": 37.7,
+              "min": 37.7
+            },
+            "fixed_carbon_adb": null
+          }
+        ]
+      }
+    }
+  ]
+}

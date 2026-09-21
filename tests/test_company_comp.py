@@ -28,13 +28,16 @@ def main():
         eps=Decimal("2"),
         price=Decimal("20"),
         total_assets=Decimal("900"),
+        total_liabilities=Decimal("600"),
         net_income=Decimal("150"),
     )
     assert full.enterprise_value == Decimal("1200"), full.enterprise_value
     assert_close(full.ev_to_ebitda, 6.0)
     assert_close(full.ev_to_revenue, 2.4)
     assert_close(full.pe_ratio, 10.0)
-    assert_close(full.price_to_book, 1000 / 900)
+    # True P/B: total_equity backfilled = assets - liabilities = 900 - 600 = 300
+    assert full.total_equity == Decimal("300"), full.total_equity
+    assert_close(full.price_to_book, 1000 / 300)
     assert full.is_screenable is True
     assert full.exclusion_reasons == []
     print("PASS full-data case")
@@ -67,6 +70,7 @@ def main():
         price=Decimal("15"),
         shares_outstanding=Decimal("40"),
         ebitda=Decimal("100"),
+        revenue=Decimal("500"),  # needed so EV/Revenue is computable too
     )
     assert backfill.market_cap == Decimal("600"), backfill.market_cap
     assert backfill.is_screenable is True
@@ -93,6 +97,7 @@ def main():
         sector="Tech",
         market_cap=Decimal("1000"),
         ebitda=Decimal("0"),
+        revenue=Decimal("500"),  # present so the only exclusion is the zero EBITDA
     )
     assert zero_ebitda.ev_to_ebitda is None
     assert zero_ebitda.is_screenable is False
@@ -125,6 +130,8 @@ def main():
         {"revenue": Decimal("-500")},
         {"total_assets": Decimal("-1")},
         {"cash_and_equivalents": Decimal("-1")},
+        {"total_liabilities": Decimal("-1")},
+        {"total_equity": Decimal("-1")},
     ]:
         try:
             CompanyComp(
@@ -149,6 +156,20 @@ def main():
         else:
             raise AssertionError(f"Expected ValidationError for {kwargs}")
     print("PASS validation: empty-string identifiers rejected")
+
+    # 10. ev_to_revenue / exclusion_reasons symmetry: missing revenue is now a
+    #     first-class exclusion reason (previously only market_cap/ebitda were).
+    no_revenue = CompanyComp(
+        ticker="NOREV.JK",
+        company_name="No Revenue Co",
+        sector="Industrials",
+        market_cap=Decimal("1000"),
+        ebitda=Decimal("100"),
+    )
+    assert no_revenue.ev_to_revenue is None
+    assert "missing revenue" in no_revenue.exclusion_reasons, no_revenue.exclusion_reasons
+    assert no_revenue.is_screenable is False
+    print("PASS ev_to_revenue/exclusion symmetry (missing revenue surfaced)")
 
     print("\nALL TESTS PASSED")
 

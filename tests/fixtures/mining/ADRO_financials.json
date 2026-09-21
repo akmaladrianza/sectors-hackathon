@@ -1,0 +1,26 @@
+{
+  "year": 2024,
+  "available_years": [
+    2023,
+    2024
+  ],
+  "data": {
+    "slug": "pt-alamtri-resources-indonesia-tbk",
+    "symbol": "ADRO.JK",
+    "name": "PT Alamtri Resources Indonesia Tbk",
+    "year": 2024,
+    "assets_usd": 6702000000.0,
+    "revenue_usd": 2079000000.0,
+    "revenue_breakdown": {
+      "coal_mining_and_trading": 1151900000.0,
+      "mining_services": 848770000.0,
+      "others": 77980000.0
+    },
+    "cost_of_revenue_usd": 1204690000.0,
+    "cost_of_revenue_breakdown": {
+      "royalty": 146990000.0,
+      "freight_and_handling": 134820000.0
+    },
+    "net_profit_usd": 1556000000.0
+  }
+}

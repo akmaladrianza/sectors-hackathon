@@ -1,0 +1,46 @@
+{
+  "results": [
+    {
+      "slug": "pt-merdeka-battery-minerals-tbk",
+      "name": "PT Merdeka Battery Minerals Tbk",
+      "symbol": "MBMA.JK",
+      "company_type": "Holding",
+      "key_operation": "Investment",
+      "commodity_type": [
+        "Nickel"
+      ]
+    },
+    {
+      "slug": "pt-merdeka-copper-gold-tbk",
+      "name": "PT Merdeka Copper Gold Tbk",
+      "symbol": "MDKA.JK",
+      "company_type": "Holding",
+      "key_operation": "Mining",
+      "commodity_type": [
+        "Copper",
+        "Gold",
+        "Silver"
+      ]
+    },
+    {
+      "slug": "pt-merdeka-industry-mineral",
+      "name": "PT Merdeka Industry Mineral",
+      "symbol": null,
+      "company_type": "Holding",
+      "key_operation": "Investment",
+      "commodity_type": [
+        "Nickel"
+      ]
+    }
+  ],
+  "pagination": {
+    "total_count": 3,
+    "showing": 3,
+    "limit": 20,
+    "offset": 0,
+    "has_next": false,
+    "has_previous": false,
+    "next_offset": null,
+    "previous_offset": null
+  }
+}

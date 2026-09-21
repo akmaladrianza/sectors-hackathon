@@ -77,6 +77,11 @@ class CompanyComp(BaseModel):
     total_debt: Optional[Decimal] = Field(None, description="Total interest-bearing debt")
     cash_and_equivalents: Optional[Decimal] = Field(None, ge=0, description="Cash + short-term investments")
     total_assets: Optional[Decimal] = Field(None, ge=0, description="Total assets")
+    total_liabilities: Optional[Decimal] = Field(None, ge=0, description="Total liabilities")
+    total_equity: Optional[Decimal] = Field(
+        None, ge=0, description="Book value of equity (total_assets - total_liabilities). "
+        "Used for a true price-to-book ratio instead of the total_assets approximation."
+    )
 
     # --- Income statement / profitability (raw, TTM) ----------------------
     revenue: Optional[Decimal] = Field(None, ge=0, description="Trailing-twelve-month revenue")
@@ -108,6 +113,25 @@ class CompanyComp(BaseModel):
             and self.shares_outstanding is not None
         ):
             self.market_cap = self.price * self.shares_outstanding
+        return self
+
+    # --- Validation: backfill total_equity when possible ------------------
+    @model_validator(mode="after")
+    def _fill_total_equity(self) -> "CompanyComp":
+        """Derive ``total_equity = total_assets - total_liabilities`` if omitted.
+
+        Both raw balance-sheet figures are disclosed for IDX banks/industrials,
+        so this lets the mapper supply them without storing a redundant derived
+        value, and enables a true (non-approximate) price-to-book ratio.
+        """
+        if (
+            self.total_equity is None
+            and self.total_assets is not None
+            and self.total_liabilities is not None
+        ):
+            equity = self.total_assets - self.total_liabilities
+            if equity >= 0:
+                self.total_equity = equity
         return self
 
     # --- Derived: valuation multiples ------------------------------------
@@ -154,24 +178,28 @@ class CompanyComp(BaseModel):
     @computed_field
     @property
     def price_to_book(self) -> Optional[float]:
-        """Market cap / book value of equity.
+        """Market cap / book value of equity (true P/B).
 
-        Note: this is an approximation using ``market_cap / total_assets``;
-        true P/B requires ``total_equity = total_assets - total_liabilities``.
-        ``None`` if either is unusable.
+        Uses ``total_equity`` (book value of equity), not ``total_assets`` — the
+        textbook definition. ``total_equity`` is either supplied directly or
+        backfilled as ``total_assets - total_liabilities`` by ``_fill_total_equity``.
+        ``None`` if market cap or equity is missing/zero.
         """
-        if self.market_cap is None or not self.total_assets or self.total_assets == 0:
+        equity = self.total_equity
+        if self.market_cap is None or not equity or equity == 0:
             return None
-        return float(self.market_cap / self.total_assets)
+        return float(self.market_cap / equity)
 
     @computed_field
     @property
     def is_screenable(self) -> bool:
         """True if enough data exists to compute the core valuation multiples.
 
-        A company missing ``market_cap`` or a non-positive ``ebitda`` cannot
-        produce a meaningful EV-based multiple, so the screener should treat it
-        as "excluded for data reasons" rather than silently skipping it.
+        A company missing ``market_cap``, a non-positive ``ebitda``, or a
+        missing/non-positive ``revenue`` cannot produce a meaningful EV-based
+        multiple, so the screener should treat it as "excluded for data reasons"
+        rather than silently skipping it (see ``exclusion_reasons`` for the full
+        set of reasons).
         """
         return not self.exclusion_reasons
 
@@ -191,6 +219,12 @@ class CompanyComp(BaseModel):
             reasons.append("missing ebitda")
         elif self.ebitda <= 0:
             reasons.append("non-positive ebitda")
+        # Symmetry with ev_to_revenue: a missing/zero revenue means EV/Revenue is
+        # None with no way to surface *why* — so record it here too.
+        if self.revenue is None:
+            reasons.append("missing revenue")
+        elif self.revenue <= 0:
+            reasons.append("non-positive revenue")
         return reasons
 
     # --- Serialization: float semantics for Decimal monetary fields -------

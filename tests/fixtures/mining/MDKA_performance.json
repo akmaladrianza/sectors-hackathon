@@ -1,0 +1,94 @@
+{
+  "year": 2024,
+  "available_years": [
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+  ],
+  "data": [
+    {
+      "year": 2024,
+      "commodity_type": "Copper",
+      "commodity_sub_type": null,
+      "commodity_stats": {
+        "unit": "kton",
+        "mining_operation_status": "production",
+        "production_volume": 13.902,
+        "sales_volume": 14.411,
+        "resources_reserves": {
+          "measurement_year": 2024,
+          "total_reserves_Mt": 430.8,
+          "Au_reserves_g_per_ton": 0.64,
+          "Au_reserves_koz": 8836.0,
+          "Ag_reserves_g_per_ton": 4.17,
+          "Ag_reserves_koz": 57800.0,
+          "Cu_reserves_pct": 0.59,
+          "Cu_reserves_Mt": 1861.5,
+          "total_resources_Mt": 2207.4,
+          "Au_resources_g_per_ton": 0.52,
+          "Au_resources_koz": 36872.0,
+          "Ag_resources_g_per_ton": 19.09,
+          "Ag_resources_koz": 90400.0,
+          "Cu_resources_pct": 0.47,
+          "Cu_resources_Mt": 8639.0
+        },
+        "products": [
+          {
+            "product_name": "Wetar Block",
+            "Cu_pct": {
+              "max": 0.39,
+              "min": 0.39
+            }
+          }
+        ]
+      }
+    },
+    {
+      "year": 2024,
+      "commodity_type": "Gold",
+      "commodity_sub_type": null,
+      "commodity_stats": {
+        "unit": "koz",
+        "mining_operation_status": "production",
+        "production_volume": 115.867,
+        "sales_volume": 108.471,
+        "resources_reserves": {
+          "measurement_year": 2024,
+          "total_reserves_Mt": 430.8,
+          "Au_reserves_g_per_ton": 0.64,
+          "Au_reserves_koz": 8836.0,
+          "Ag_reserves_g_per_ton": 4.17,
+          "Ag_reserves_koz": 57800.0,
+          "Cu_reserves_pct": 0.59,
+          "Cu_reserves_Mt": 1861.5,
+          "total_resources_Mt": 2207.4,
+          "Au_resources_g_per_ton": 0.52,
+          "Au_resources_koz": 36872.0,
+          "Ag_resources_g_per_ton": 19.09,
+          "Ag_resources_koz": 90400.0,
+          "Cu_resources_pct": 0.47,
+          "Cu_resources_Mt": 8639.0
+        },
+        "products": [
+          {
+            "product_name": "Tujuh Bukit Block",
+            "Au_g_per_ton": {
+              "max": 0.65,
+              "min": 0.65
+            }
+          },
+          {
+            "product_name": "Pani Block",
+            "Au_g_per_ton": {
+              "max": 0.78,
+              "min": 0.78
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
