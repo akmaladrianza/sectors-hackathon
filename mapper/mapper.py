@@ -91,6 +91,7 @@ class ReportMapper:
         """
         overview = payload.get("overview") or {}
         financials = payload.get("financials") or {}
+        valuation = payload.get("valuation") or {}
 
         template = classify_template(overview)
         row = self._select_financial_row(financials, year)
@@ -122,6 +123,11 @@ class ReportMapper:
                 ebit=_dec(row.get("ebit")) if row else None,
                 net_income=_dec(row.get("earnings")) if row else None,
                 eps=_dec(financials.get("eps")),
+                intrinsic_value=_dec(valuation.get("intrinsic_value")),
+                forward_pe=self._to_float(valuation.get("forward_pe")),
+                pe_peer_avg=self._latest_peer_avg(valuation, "pe_peer_avg"),
+                pb_peer_avg=self._latest_peer_avg(valuation, "pb_peer_avg"),
+                ps_peer_avg=self._latest_peer_avg(valuation, "ps_peer_avg"),
                 as_of_date=overview.get("latest_close_date"),
                 fiscal_period=_fiscal_period(row),
             )
@@ -142,6 +148,31 @@ class ReportMapper:
             if row.get("year") == year:
                 return row
         return None
+
+    @staticmethod
+    def _to_float(value) -> Optional[float]:
+        """Coerce a JSON number to ``float``; ``None`` for missing/garbage input."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _latest_peer_avg(valuation: dict, key: str) -> Optional[float]:
+        """Read the most-recent peer-average multiple from ``historical_valuation``.
+
+        Sectors' ``valuation.historical_valuation`` is a per-year list; each row
+        carries ``pe_peer_avg``/``pb_peer_avg``/``ps_peer_avg``. We take the latest
+        year's value (matching how we pick the latest financial row). Returns
+        ``None`` when the section is absent or the field is missing/``null``.
+        """
+        hist = valuation.get("historical_valuation") or []
+        if not hist:
+            return None
+        latest = max(hist, key=lambda r: r.get("year") or 0)
+        return ReportMapper._to_float(latest.get(key))
 
     @staticmethod
     def _resolve_cash(template: Template, row: Optional[dict]) -> Optional[Decimal]:

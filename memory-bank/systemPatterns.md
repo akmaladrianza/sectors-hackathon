@@ -18,16 +18,19 @@ Sectors_Hackathon/
 │   ├── mapper.py               # ReportMapper (bank vs generic template, cash derivation)
 │   └── mining_overlay.py       # map_mining_overlay (perf/financials/sales-destination)
 ├── engine/                     # cross-model valuation functions
-│   ├── __init__.py             # re-exports EV/tonne engine
+│   ├── __init__.py             # re-exports EV/tonne + implied-valuation engines
 │   ├── mining_valuation.py     # EV/tonne-of-reserves & -resources join
+│   ├── implied_valuation.py    # peer-median -> implied price + Sectors IV comparison
 │   ├── proxy_library.py        # sector-conditional growth proxies (bank/miner/generic)
-│   └── dcf.py                  # 2-stage DCF ("expected rate of return" instead of WACC)
+│   ├── dcf.py                  # 2-stage DCF (FCFF build-up + FCFE bridge)
+│   └── xlsx_export.py          # formula-driven DCF sheet for the workbook export
 ├── screener/                   # multi-peer batch orchestration
 │   ├── __init__.py             # re-exports ScreenerResult, screen_tickers, ...
 │   └── screener.py             # screen_tickers (screenable/miners/excluded partition)
 ├── view.py                     # presentation transforms (result -> table rows)
 ├── app.py                      # Streamlit "Simple + Advanced mode" UI entry point
 ├── assistant.py                # citation-safe DCF suggestion helper (curated refs only)
+├── news_assistant.py           # optional Tavily retrieval-then-quote layer (off by default)
 ├── README.md                   # cold-clone onboarding
 ├── requirements.txt            # declared deps (pydantic, requests, pandas, streamlit, ...)
 ├── scripts/
@@ -44,11 +47,12 @@ Sectors_Hackathon/
 │   ├── test_screener.py        # screener tests (fake client, deterministic)
 │   ├── test_view.py            # presentation-transform tests (pure)
 │   ├── test_advanced.py        # proxy library + DCF tests (pure)
+│   ├── test_implied.py         # implied-valuation + FCFF/FCFE tests (pure)
 │   ├── test_assistant.py       # citation-safe assistant tests
 │   └── fixtures/               # static JSON payloads (incl. mining/*.json)
 ├── data/                       # runtime artifacts (gitignored)
 │   └── sectors_cache.db        # SQLite cache
-├── .env                        # SECTORS_API_KEY (gitignored)
+├── .env                        # SECTORS_API_KEY (+ TAVILY_API_KEY) (gitignored)
 ├── .env.example                # committed key template
 └── memory-bank/                # this documentation
 ```

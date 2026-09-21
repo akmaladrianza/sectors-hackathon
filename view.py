@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Optional
 
 from screener.screener import ScreenerResult
+from engine.implied_valuation import build_implied_valuation
 
 
 def _fmt_multiple(v: Optional[float]) -> Optional[float]:
@@ -19,6 +20,20 @@ def _fmt_multiple(v: Optional[float]) -> Optional[float]:
     if v is None:
         return None
     return round(v, 2)
+
+
+def _fmt_price(v) -> Optional[float]:
+    """Round a monetary/price value to 2 decimals; None stays None."""
+    if v is None:
+        return None
+    return round(float(v), 2)
+
+
+def _fmt_pct(v: Optional[float]) -> Optional[float]:
+    """Round a fractional upside to 2 decimals (e.g. 0.1234 -> 0.12); None stays None."""
+    if v is None:
+        return None
+    return round(v, 4)
 
 
 def comps_rows(result: ScreenerResult) -> list[dict]:
@@ -34,6 +49,8 @@ def comps_rows(result: ScreenerResult) -> list[dict]:
                 "EV/Revenue": _fmt_multiple(c.ev_to_revenue),
                 "P/E": _fmt_multiple(c.pe_ratio),
                 "P/B": _fmt_multiple(c.price_to_book),
+                "Sectors IV": _fmt_price(c.intrinsic_value),
+                "Upside": _fmt_pct(c.intrinsic_upside),
             }
         )
     return rows
@@ -89,4 +106,37 @@ def to_mining_dataframe(result: ScreenerResult):
     import pandas as pd
 
     rows = mining_rows(result)
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
+def implied_valuation_rows(result: ScreenerResult) -> list[dict]:
+    """Rows for the implied-valuation panel (comps-implied price + Sectors IV).
+
+    One row per screenable peer, showing current price, the implied-price range from
+    peer-median multiples, Sectors' own intrinsic value, and a coarse verdict.
+    """
+    rows = []
+    all_peers = result.screenable + [m.comp for m in result.miners]
+    for c in result.screenable:
+        iv = build_implied_valuation(c, all_peers)
+        low = float(iv.implied_low) if iv.implied_low is not None else None
+        high = float(iv.implied_high) if iv.implied_high is not None else None
+        current = float(iv.current_price) if iv.current_price is not None else None
+        rows.append(
+            {
+                "Ticker": c.ticker,
+                "Current price": _fmt_price(current),
+                "Implied low": _fmt_price(low),
+                "Implied high": _fmt_price(high),
+                "Sectors IV": _fmt_price(c.intrinsic_value),
+                "Verdict": iv.verdict,
+            }
+        )
+    return rows
+
+
+def to_implied_dataframe(result: ScreenerResult):
+    import pandas as pd
+
+    rows = implied_valuation_rows(result)
     return pd.DataFrame(rows) if rows else pd.DataFrame()

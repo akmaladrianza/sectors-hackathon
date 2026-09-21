@@ -17,6 +17,18 @@ optional true-NAV (narrated, not built).
 - Initial commit: `5d193e6` — "Initial CompanyComp model with validation, screening
   flags, and test suite".
 - Created the `memory-bank/` directory and its core files (initial version).
+- **2026-09-21 valuation revision** (this session):
+  - **Key discovery — Sectors already ships a `valuation` report section** the code
+    never requested: `intrinsic_value`, `forward_pe`, and per-year peer-average
+    multiples (`pe_peer_avg`/`pb_peer_avg`/`ps_peer_avg`). This is Sectors' own
+    fair-value + comps benchmark, distinct from our locally-derived multiples. Now
+    wired into the mapper + screener (`sections=["overview","financials","valuation"]`).
+  - Added `engine/implied_valuation.py` (peer-median → implied price + Sectors IV →
+    "target vs current" panel with an informational verdict), expanded the DCF to FCFF
+    build-up + FCFE bridge, built `news_assistant.py` (Tavily retrieval-then-quote, off
+    by default), `engine/xlsx_export.py` (formula-driven DCF sheet), and reworked
+    `app.py` (upper-right Mimir branding + explainer, `st.session_state` fix so Advanced
+    sliders recompute live). New `tests/test_implied.py`. Full detail in `progress.md`.
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon

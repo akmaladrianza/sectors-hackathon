@@ -117,7 +117,7 @@ def screen_tickers(
             if cache is not None:
                 payload = cache.get(*cache_key)
             if payload is None:
-                payload = client.get_company_report(base, sections=["overview", "financials"])
+                payload = client.get_company_report(base, sections=["overview", "financials", "valuation"])
                 if cache is not None:
                     cache.set(*cache_key, payload)
             comp, _template = report_to_company_comp(payload)

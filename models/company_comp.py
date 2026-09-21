@@ -103,6 +103,20 @@ class CompanyComp(BaseModel):
     as_of_date: Optional[date] = Field(None, description="Date financials are reported as of")
     fiscal_period: Optional[str] = Field(None, description="e.g. 'FY2024', 'Q3 2025 TTM'")
 
+    # --- Sectors-native valuation (fair-value benchmark) -------------------
+    # These come from the Sectors API's own ``valuation`` report section, NOT our
+    # own re-derivation: ``intrinsic_value`` is Sectors' disclosed fair-value/share
+    # figure and ``forward_pe`` / peer-average multiples are Sectors' server-side
+    # comps benchmark. They are load-bearing, defensible inputs (Sectors-native),
+    # distinct from the ``computed_field`` multiples below which we derive locally.
+    intrinsic_value: Optional[Decimal] = Field(
+        None, ge=0, description="Sectors' own fair-value / intrinsic share price"
+    )
+    forward_pe: Optional[float] = Field(None, description="Sectors' forward P/E")
+    pe_peer_avg: Optional[float] = Field(None, description="Sectors' P/E peer average")
+    pb_peer_avg: Optional[float] = Field(None, description="Sectors' P/B peer average")
+    ps_peer_avg: Optional[float] = Field(None, description="Sectors' P/S peer average")
+
     # --- Validation: backfill market_cap when possible --------------------
     @model_validator(mode="after")
     def _fill_market_cap(self) -> "CompanyComp":
@@ -192,6 +206,20 @@ class CompanyComp(BaseModel):
 
     @computed_field
     @property
+    def intrinsic_upside(self) -> Optional[float]:
+        """Upside/downside of the current price vs Sectors' own intrinsic value.
+
+        ``(intrinsic_value / price) - 1`` as a signed fraction (e.g. ``0.12`` for
+        +12%). ``None`` if either the price or the disclosed intrinsic value is
+        missing/zero. This is a Sectors-native comparison (their own fair-value
+        figure against their own last-close price), not our forecast.
+        """
+        if self.price is None or not self.intrinsic_value or self.intrinsic_value == 0:
+            return None
+        return float(self.intrinsic_value / self.price - 1)
+
+    @computed_field
+    @property
     def is_screenable(self) -> bool:
         """True if enough data exists to compute the core valuation multiples.
 
@@ -230,7 +258,8 @@ class CompanyComp(BaseModel):
     # --- Serialization: float semantics for Decimal monetary fields -------
     @field_serializer("market_cap", "price", "shares_outstanding", "total_debt",
                       "cash_and_equivalents", "total_assets", "revenue", "ebitda",
-                      "ebit", "net_income", "eps", "enterprise_value", when_used="json")
+                      "ebit", "net_income", "eps", "enterprise_value",
+                      "intrinsic_value", when_used="json")
     def _serialize_decimal(self, value: Optional[Decimal]) -> Optional[float]:
         if value is None:
             return None

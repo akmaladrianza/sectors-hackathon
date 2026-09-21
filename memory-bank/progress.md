@@ -130,6 +130,35 @@
   the EV/tonne engine, the screener, the Streamlit app (Simple + Advanced), the
   sector-conditional proxy library + DCF, and the citation-safe assistant + README.
   All 8 test suites green. Everything else below is a documented, deliberate deferral.
+- **2026-09-21 UI/valuation revision (this session):**
+  - **Sectors `valuation` section now wired in** (was never requested before): the
+    mapper reads `intrinsic_value`, `forward_pe`, and the latest-year peer-average
+    multiples (`pe_peer_avg`/`pb_peer_avg`/`ps_peer_avg`) from the report's
+    `valuation` block. `CompanyComp` gained `intrinsic_value` / `forward_pe` /
+    `pe_peer_avg` / `pb_peer_avg` / `ps_peer_avg` plus a computed `intrinsic_upside`.
+    `screen_tickers` now requests `sections=["overview","financials","valuation"]`.
+  - **New `engine/implied_valuation.py`** — inverts peer-median multiples (excluding
+    the subject) into implied share prices (EV/EBITDA + EV/Revenue via EV→equity→price;
+    P/E + P/B direct), combined with Sectors' own `intrinsic_value`, to produce a
+    "target vs current price" panel with an informational Undervalued/Fair/Overvalued
+    verdict (never a recommendation). Requires ≥2 peers (a single peer isn't a group).
+  - **DCF expanded** (`engine/dcf.py`) — added an optional FCFF build-up (EBITDA
+    margin, D&A %, tax rate, capex %, ΔNWC %) plus an FCFE bridge (`shares_outstanding`
+    + `net_debt`) yielding `intrinsic_equity` and `intrinsic_price_per_share`, so the
+    DCF now also produces a price (not just an EV). Backward-compatible: sales-margin
+    fallback unchanged. `assistant.suggest_working_capital`/`suggest_capex` are now
+    wired into the DCF form (previously computed but never used).
+  - **`news_assistant.py`** — optional Tavily-powered retrieval-then-quote layer (off
+    by default; `TAVILY_API_KEY`). Only surfaces verbatim-quoted snippets + source
+    URL, never interprets; no result → "no cited source found". Calls Tavily REST
+    directly via `requests` (no SDK dep).
+  - **`engine/xlsx_export.py`** — formula-driven DCF sheet in the downloadable workbook
+    (live Excel `=` formulas over editable assumption cells), plus an "Implied" sheet.
+  - **`app.py`** — Mimir branding repositioned to the upper-right + "what is Mimir"
+    explainer; screen result persisted in `st.session_state` so Advanced-mode sliders
+    recompute live (the old `if run:` block only rendered on the button rerun, so
+    edits never re-rendered); live-updating DCF inputs + news toggle.
+  - New test suite `tests/test_implied.py` (implied-valuation + FCFF/FCFE) — green.
 - Product definition: settled — name (provisional), problem statement, dual audience
   (coverage-gap retail via Simple mode, M&A advisors via Advanced mode), UI/output
   structure, mining overlay, two-mode valuation architecture, AI-assistant citation
