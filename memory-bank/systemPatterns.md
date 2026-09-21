@@ -18,11 +18,13 @@ Sectors_Hackathon/
 │   ├── mapper.py               # ReportMapper (bank vs generic template, cash derivation)
 │   └── mining_overlay.py       # map_mining_overlay (perf/financials/sales-destination)
 ├── engine/                     # cross-model valuation functions
-│   ├── __init__.py             # re-exports EV/tonne + implied-valuation engines
+│   ├── __init__.py             # re-exports all engines
 │   ├── mining_valuation.py     # EV/tonne-of-reserves & -resources join
 │   ├── implied_valuation.py    # peer-median -> implied price + Sectors IV comparison
+│   ├── football_field.py       # industry-matched valuation ranges (min-max bars)
+│   ├── peer_lookup.py          # same-sub_sector peer resolution (Companies Screener)
 │   ├── proxy_library.py        # sector-conditional growth proxies (bank/miner/generic)
-│   ├── dcf.py                  # 2-stage DCF (FCFF build-up + FCFE bridge)
+│   ├── dcf.py                  # 2-stage DCF (FCFF build-up + FCFE bridge + WC days)
 │   └── xlsx_export.py          # formula-driven DCF sheet for the workbook export
 ├── screener/                   # multi-peer batch orchestration
 │   ├── __init__.py             # re-exports ScreenerResult, screen_tickers, ...
@@ -30,9 +32,9 @@ Sectors_Hackathon/
 ├── view.py                     # presentation transforms (result -> table rows)
 ├── app.py                      # Streamlit "Simple + Advanced mode" UI entry point
 ├── assistant.py                # citation-safe DCF suggestion helper (curated refs only)
-├── news_assistant.py           # optional Tavily retrieval-then-quote layer (off by default)
+├── sectors_news.py             # Sectors-native news quoting (retrieval-then-quote)
 ├── README.md                   # cold-clone onboarding
-├── requirements.txt            # declared deps (pydantic, requests, pandas, streamlit, ...)
+├── requirements.txt            # declared deps (+ plotly)
 ├── scripts/
 │   ├── prove_bbca_pull.py      # live BBCA client+cache proof (network-count assert)
 │   ├── prove_mining_overlay.py # live MDKA+ADRO mining overlay proof
@@ -48,11 +50,12 @@ Sectors_Hackathon/
 │   ├── test_view.py            # presentation-transform tests (pure)
 │   ├── test_advanced.py        # proxy library + DCF tests (pure)
 │   ├── test_implied.py         # implied-valuation + FCFF/FCFE tests (pure)
+│   ├── test_football.py        # football-field + WC-days tests (pure)
 │   ├── test_assistant.py       # citation-safe assistant tests
 │   └── fixtures/               # static JSON payloads (incl. mining/*.json)
 ├── data/                       # runtime artifacts (gitignored)
 │   └── sectors_cache.db        # SQLite cache
-├── .env                        # SECTORS_API_KEY (+ TAVILY_API_KEY) (gitignored)
+├── .env                        # SECTORS_API_KEY (gitignored)
 ├── .env.example                # committed key template
 └── memory-bank/                # this documentation
 ```

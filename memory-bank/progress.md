@@ -159,6 +159,30 @@
     recompute live (the old `if run:` block only rendered on the button rerun, so
     edits never re-rendered); live-updating DCF inputs + news toggle.
   - New test suite `tests/test_implied.py` (implied-valuation + FCFF/FCFE) — green.
+- **2026-09-21 UI/valuation revision #2 (this session):**
+  - **News resourced to Sectors only**: dropped Tavily (`news_assistant.py` removed);
+    new `sectors_news.py` quotes Sectors' own `GET /v2/news/` (`get_news()` on the
+    client) verbatim — title/body/source/timestamp, never interpreted. `TAVILY_API_KEY`
+    removed from `.env.example`; no third-party news dependency remains.
+  - **Company-name → ticker search**: `SectorsClient.search_companies()` (Companies
+    Screener `where=company_name like '%kw%'`) powers a sidebar "search company by name"
+    box (Unilever → UNVR, Merdeka → MDKA).
+  - **Football-field chart** (`engine/football_field.py` + `engine/peer_lookup.py`):
+    same-`sub_sector` peers resolved via the Companies Screener (NOT the raw typed
+    ticker list — fixes "can't compare BBCA with BUMI"); horizontal min–max implied
+    price range per valuation method, current price as ▲ marker, DCF + Sectors IV as
+    single-point rows. Rendered with Plotly (`plotly` added to requirements).
+  - **Working-capital breakdown**: `engine/dcf.py` gained
+    `working_capital_days_to_margin` + `nwc_change_margin_from_days`; the Advanced-mode
+    ΔNWC slider is now AR days / Inventory days / AP days (Inventory solid; AR/AP
+    labelled "approximated" since Sectors lacks trade receivable/payable line items).
+  - **UI redesign**: custom CSS theme (warm accent palette, card/badge styling,
+    typography) + refined header; "Sectors IV"/"Upside" columns explained inline.
+  - **Download button fixed**: the `.xlsx` export is now a prominent "📥 Download
+    financial model" section right after the chart (not buried at the bottom), and any
+    export failure surfaces a full traceback in an expander instead of a one-line
+    warning.
+  - New test suite `tests/test_football.py` (peer inversion + WC days) — green.
 - Product definition: settled — name (provisional), problem statement, dual audience
   (coverage-gap retail via Simple mode, M&A advisors via Advanced mode), UI/output
   structure, mining overlay, two-mode valuation architecture, AI-assistant citation

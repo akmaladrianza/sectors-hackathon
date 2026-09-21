@@ -2,10 +2,6 @@
 
 Streamlit UI (Simple + Advanced mode). Entry point:
     streamlit run app.py
-
-Usage: type/pick tickers, click Run, and get a comps table + an implied-valuation
-panel + a mining overlay + an explicit excluded-peers panel, all source-dated, with a
-formula-driven xlsx export (DCF + implied valuation included).
 """
 
 from __future__ import annotations
@@ -25,51 +21,137 @@ import view
 from cache.sqlite_cache import SQLiteCache
 from screener.screener import screen_tickers
 from engine.proxy_library import default_growth
-from engine.dcf import run_dcf
+from engine.dcf import run_dcf, nwc_change_margin_from_days
 from engine.xlsx_export import write_dcf_sheet
+from engine.football_field import build_football_field
+from engine.peer_lookup import lookup_peers
+from sectors_client.client import SectorsClient
 import assistant
-import news_assistant
+import sectors_news
 
-DEFAULT_TICKERS = "BBCA, TLKM, ASII, UNVR, MDKA"
+DEFAULT_TICKERS = "BBCA, BBNI, BRIS"
 CACHE_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "sectors_cache.db")
 
 st.set_page_config(page_title="Mimir — Comps Screener", layout="wide")
+
+# ---------------------------------------------------------------------------
+# Custom theme (clean, modern, professional) via CSS injection.
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+    :root {
+        --accent: #d97757;          /* warm accent, Claude-ish terracotta */
+        --accent-soft: rgba(217, 119, 87, 0.12);
+        --ink: #1f1e1b;             /* near-black warm ink */
+        --muted: #8a8578;
+        --surface: #faf9f6;         /* warm off-white */
+        --border: #e7e3d8;
+    }
+    .block-container { padding-top: 1.5rem; padding-bottom: 3rem; }
+    h1, h2, h3 { color: var(--ink); letter-spacing: -0.01em; }
+    .mimir-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.1rem 1.25rem;
+        margin-bottom: 1rem;
+    }
+    .mimir-badge {
+        display: inline-block;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-radius: 999px;
+        padding: 0.15rem 0.7rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .mimir-muted { color: var(--muted); font-size: 0.85rem; }
+    .mimir-brand {
+        text-align: right;
+        font-size: 2.6rem;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        color: var(--ink);
+        line-height: 1.0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --- Header: name pinned upper-right + explainer -------------------------
 _c1, _c2 = st.columns([3, 1])
 with _c2:
     st.markdown(
-        "<div style='text-align:right; line-height:1.05'>"
-        "<span style='font-size:2.4rem; font-weight:700; letter-spacing:-0.02em'>Mimir</span><br>"
-        "<span style='font-size:0.85rem; color:#888'>Comparable-company analysis<br>+ mining overlay</span>"
-        "</div>",
+        "<div class='mimir-brand'>Mimir</div>"
+        "<div style='text-align:right'><span class='mimir-badge'>Comps · Mining · DCF</span></div>",
         unsafe_allow_html=True,
     )
 with _c1:
     st.caption(
         "Named after Mímir, the Norse god of wisdom and knowledge. Mimir automates the "
-        "mechanical layers of fundamental analysis — comps, reserve-adjusted mining "
-        "valuation, and DCF scaffolding — for IDX & SGX equities, sourced from the "
-        "Sectors API, with every number traceable to a source."
+        "mechanical layers of fundamental analysis — comparable-company valuation, "
+        "reserve-adjusted mining metrics, and DCF — for IDX equities, sourced entirely "
+        "from the Sectors API, with every number traceable to a source."
     )
 
 # --- Sidebar: inputs ------------------------------------------------------
 st.sidebar.header("Screener")
+
+# Company search -> suggested ticker
+search_box = st.sidebar.text_input(
+    "Search company by name",
+    placeholder="e.g. Unilever, Merdeka, Mandiri…",
+)
+
+
+def _company_suggestions(keyword: str, client: SectorsClient) -> list[dict]:
+    """Return [(symbol, company_name)] for a company-name keyword."""
+    if len(keyword.strip()) < 3:
+        return []
+    try:
+        payload = client.search_companies(keyword.strip())
+    except Exception:
+        return []
+    out = []
+    for r in payload.get("results") or []:
+        sym = r.get("symbol")
+        nm = r.get("company_name")
+        if sym and nm:
+            out.append({"symbol": sym, "name": nm})
+    return out[:8]
+
+
+search_hits = []
+if search_box:
+    _client = SectorsClient()
+    search_hits = _company_suggestions(search_box, _client)
+    if search_hits:
+        st.sidebar.caption(f"{len(search_hits)} match(es):")
+        for hit in search_hits:
+            st.sidebar.markdown(
+                f"`{hit['symbol']}` — {hit['name']}",
+                help="Copy this ticker into the box below.",
+            )
+    else:
+        st.sidebar.caption("No matches (try ≥3 letters).")
+
 tickers_input = st.sidebar.text_area(
     "Tickers (comma-separated)",
     value=DEFAULT_TICKERS,
-    help="IDX tickers, e.g. BBCA, TLKM, ASII. Mining peers (MDKA, ADRO) get an overlay.",
+    help="IDX tickers, e.g. BBCA, BBNI, BRIS. Use same-industry peers for a fair "
+    "comparison — mixing a bank, a coal miner and a consumer name is meaningless.",
 )
 advanced = st.sidebar.checkbox("Advanced mode (DCF)", value=False)
-news_enabled = st.sidebar.checkbox("Enable news-grounded suggestions (beta)", value=False)
+news_enabled = st.sidebar.checkbox("Show Sectors news", value=False)
 run = st.sidebar.button("Run screener", type="primary")
 
-# --- Disclaimer (hackathon rule: not financial advice) --------------------
+# --- Disclaimer ------------------------------------------------------------
 st.sidebar.markdown(
     "---\n"
     "**Disclaimer**: informational analysis tool, not financial advice. "
-    "Data sourced from the Sectors API; reserve figures are company self-reported. "
-    "News snippets (if enabled) are verbatim-quoted with source, never interpreted."
+    "All data sourced from the Sectors API."
 )
 
 # ---------------------------------------------------------------------------
@@ -82,10 +164,12 @@ if run:
     if os.path.dirname(CACHE_DB):
         os.makedirs(os.path.dirname(CACHE_DB), exist_ok=True)
     cache = SQLiteCache(CACHE_DB)
+    client = SectorsClient()
 
     with st.spinner("Screening..."):
         try:
-            st.session_state["result"] = screen_tickers(tickers, cache=cache)
+            st.session_state["result"] = screen_tickers(tickers, cache=cache, client=client)
+            st.session_state["client"] = client
             st.session_state["has_run"] = True
         except Exception as exc:  # noqa: BLE001
             st.error(f"Could not run screener: {exc}")
@@ -93,6 +177,7 @@ if run:
             st.stop()
 
 result = st.session_state.get("result")
+_client = st.session_state.get("client") or SectorsClient()
 if result is None:
     # First load: show intro, no result yet.
     with st.expander("ℹ️ How to use this", expanded=True):
@@ -113,6 +198,9 @@ comps_df = view.to_dataframe(result)
 if not comps_df.empty:
     st.dataframe(comps_df, use_container_width=True, hide_index=True)
     st.caption(
+        "**Sectors IV** = Sectors' own disclosed fair-value estimate per share. "
+        "**Upside** = (Sectors IV ÷ current price) − 1. Both are Sectors-native "
+        "(not our own forecast). "
         f"Source: Sectors API ({date.today().isoformat()}). "
         f"{len(result.screenable)} non-mining peers."
     )
@@ -175,16 +263,19 @@ if advanced:
                     f"{float(c.price or 0):,.0f}"
                 )
 
-            # Optional news-grounded layer (verbatim quotes, never interpreted).
+            # Optional Sectors-native news (verbatim quote, never interpreted).
             if news_enabled:
-                ns = news_assistant.suggest_news_growth(c.company_name)
-                if ns.available:
-                    st.info(
-                        f"**News snippet** (verbatim, not interpreted): {ns.value}\n\n"
-                        f"[{ns.title or 'source'}]({ns.source_url})"
-                    )
-                else:
-                    st.caption(f"News grounding unavailable: {ns.reason}")
+                items = sectors_news.suggest_company_news(
+                    _client, symbols=[c.ticker.split(".")[0]]
+                )
+                for ns in items:
+                    if ns.available:
+                        st.info(
+                            f"**{ns.title}** ({ns.timestamp[:10] if ns.timestamp else 'n/a'})\n\n"
+                            f"{ns.body}\n\n[{ns.source}]({ns.source})"
+                        )
+                    else:
+                        st.caption(f"News: {ns.reason}")
 
             # Curated (citation-safe) suggestions — now wired into the DCF below.
             wc_sugg = assistant.suggest_working_capital(c)
@@ -216,9 +307,21 @@ if advanced:
                 _capex_default = float(capex_sugg.value) if capex_sugg and capex_sugg.available else 0.15
                 cx = st.number_input("Capex (% of revenue)", 0.0, 1.0, value=_capex_default,
                                      step=0.01, key=f"cx_{c.ticker}")
-                _nwc_default = float(wc_sugg.value) if wc_sugg and wc_sugg.available else 0.05
-                nw = st.number_input("Δ net working capital (% of revenue)", -0.5, 0.5,
-                                     value=_nwc_default, step=0.01, key=f"nw_{c.ticker}")
+                # Working-capital breakdown into AR / Inventory / AP days.
+                st.caption("Working capital (days). AR/AP are *approximated* — Sectors "
+                           "does not expose trade receivables/payables directly.")
+                ar_days = st.number_input("AR days", 0.0, 365.0, value=30.0,
+                                          step=1.0, key=f"ar_{c.ticker}")
+                inv_days = st.number_input("Inventory days", 0.0, 365.0, value=30.0,
+                                           step=1.0, key=f"inv_{c.ticker}")
+                ap_days = st.number_input("AP days", 0.0, 365.0, value=30.0,
+                                          step=1.0, key=f"ap_{c.ticker}")
+                nw = nwc_change_margin_from_days(
+                    Decimal(str(ar_days)),
+                    Decimal(str(inv_days)),
+                    Decimal(str(ap_days)),
+                    Decimal(str(g)),
+                )
             r = st.number_input(
                 "Expected rate of return (discount)", min_value=0.01, max_value=0.50,
                 value=0.12, step=0.01, key=f"r_{c.ticker}", format="%.3f",
@@ -242,10 +345,13 @@ if advanced:
                 depreciation_margin=Decimal(str(dm)) if dm is not None else None,
                 tax_rate=Decimal(str(tx)) if tx is not None else None,
                 capex_margin=Decimal(str(cx)) if cx is not None else None,
-                nwc_change_margin=Decimal(str(nw)) if nw is not None else None,
+                nwc_change_margin=nw if nw is not None else None,
                 shares_outstanding=c.shares_outstanding,
                 net_debt=net_debt,
             )
+            # Persist the DCF price so the football field (rendered after) picks it up.
+            if dcf.available and dcf.intrinsic_price_per_share is not None:
+                st.session_state[f"dcf_price_{c.ticker}"] = dcf.intrinsic_price_per_share
             if dcf.available and c.revenue:
                 lines = [f"**Intrinsic EV ≈ {float(dcf.intrinsic_ev):,.0f}**"]
                 if dcf.intrinsic_price_per_share is not None:
@@ -259,11 +365,91 @@ if advanced:
                 st.info(f"DCF unavailable: {dcf.reason or 'missing revenue history'}")
 
 
-# --- Export ------------------------------------------------------------------
+# --- Football field (industry-matched valuation ranges) ---------------------
+st.subheader("Valuation football field")
+st.caption(
+    "Each bar spans the min–max implied share price from **same-sub_sector peers** "
+    "(sourced from Sectors, not the ticker list you typed) inverted via the subject's "
+    "own figures. The ▲ marker is the current price; DCF (Advanced mode) and Sectors IV "
+    "are single-point methods. Chart is informational, not a recommendation."
+)
+
+_plotly_ok = True
 try:
-    import io as _io
-    buf = _io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+    import plotly.graph_objects as go
+except Exception:
+    _plotly_ok = False
+
+subjects = list(result.screenable) + [m.comp for m in result.miners]
+if _plotly_ok and subjects:
+    for c in subjects:
+        peer_cache_key = f"peers_{c.ticker}"
+        if peer_cache_key not in st.session_state:
+            with st.spinner(f"Resolving peers for {c.ticker}…"):
+                st.session_state[peer_cache_key] = lookup_peers(c, _client)
+        pr = st.session_state[peer_cache_key]
+        dcf_price = st.session_state.get(f"dcf_price_{c.ticker}")
+
+        rows, current, sectors_iv = build_football_field(c, pr.rows, dcf_price)
+        if not rows:
+            st.info(f"{c.ticker}: no same-sub_sector peers found to chart.")
+            continue
+
+        fig = go.Figure()
+        methods = [r.method for r in rows]
+        lows = [r.low for r in rows]
+        highs = [r.high for r in rows]
+        fig.add_trace(
+            go.Bar(
+                x=[(h - l) if (h is not None and l is not None) else 0
+                   for h, l in zip(highs, lows)],
+                y=methods,
+                base=lows,
+                orientation="h",
+                marker_color="#d97757",
+                opacity=0.75,
+                name="Peer range",
+                hovertemplate="%{y}: %{base:,.0f} – %{x:,.0f}<extra></extra>",
+            )
+        )
+        if current is not None:
+            fig.add_trace(
+                go.Scatter(
+                    x=[current],
+                    y=[methods[0] if methods else 0],
+                    mode="markers",
+                    marker=dict(symbol="triangle-up", size=14, color="#1f1e1b"),
+                    name="Current price",
+                    hovertemplate="Current: %{x:,.0f}<extra></extra>",
+                )
+            )
+        fig.update_layout(
+            height=280,
+            margin=dict(l=10, r=10, t=30, b=10),
+            title=dict(text=f"{c.ticker} — valuation range vs current", font=dict(size=14)),
+            xaxis_title="Implied share price (IDR)",
+            barmode="overlay",
+        )
+        st.plotly_chart(fig, use_container_width=True, key=f"ff_{c.ticker}")
+elif not _plotly_ok:
+    st.warning("Plotly is not installed — install `plotly` to enable the football-field chart.")
+
+
+# --- Export (always visible, prominent section) ------------------------------
+import io as _io
+import traceback as _traceback
+
+st.divider()
+st.subheader("📥 Download financial model")
+st.caption(
+    "Formula-driven `.xlsx` workbook: Comps + Implied valuation + Mining + Excluded "
+    "sheets, plus a per-company **DCF** sheet with live Excel formulas so you can "
+    "re-tune assumptions offline."
+)
+_export_error = None
+_buf = _io.BytesIO()
+try:
+    with pd.ExcelWriter(_buf, engine="openpyxl") as writer:
         if result.screenable:
             view.to_dataframe(result).to_excel(writer, sheet_name="Comps", index=False)
         implied_out = view.to_implied_dataframe(result)
@@ -275,7 +461,6 @@ try:
             pd.DataFrame(view.exclusion_rows(result)).to_excel(
                 writer, sheet_name="Excluded", index=False
             )
-        # Formula-driven DCF sheet per company (tuneable in Excel).
         for c in result.screenable + [m.comp for m in result.miners]:
             g_val = Decimal(str(st.session_state.get(f"g_{c.ticker}", 0.10)))
             m_val = Decimal(str(st.session_state.get(f"m_{c.ticker}", 0.15)))
@@ -296,11 +481,17 @@ try:
                 shares_outstanding=c.shares_outstanding,
                 net_debt=net_debt_val,
             )
+except Exception as exc:  # noqa: BLE001
+    _export_error = exc
+
+if _export_error is None:
     st.download_button(
-        "Download .xlsx",
-        data=buf.getvalue(),
-        file_name="mimir_comps.xlsx",
+        "Download financial model (.xlsx)",
+        data=_buf.getvalue(),
+        file_name="mimir_financial_model.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-except Exception as exc:  # noqa: BLE001
-    st.warning(f"Excel export unavailable: {exc}")
+else:
+    st.error(f"Excel export failed: {_export_error}")
+    with st.expander("Export error details", expanded=False):
+        st.code(_traceback.format_exc())

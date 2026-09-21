@@ -15,6 +15,12 @@ from engine.implied_valuation import (
     build_implied_valuation,
     comps_implied_prices,
 )
+from engine.dcf import (
+    working_capital_days_to_margin,
+    nwc_change_margin_from_days,
+)
+from engine.football_field import build_football_field, FootballFieldRow
+from engine.peer_lookup import lookup_peers, PeerLookupResult
 
 __all__ = [
     "EVPerTonne",
@@ -24,4 +30,10 @@ __all__ = [
     "ImpliedValuation",
     "build_implied_valuation",
     "comps_implied_prices",
+    "working_capital_days_to_margin",
+    "nwc_change_margin_from_days",
+    "build_football_field",
+    "FootballFieldRow",
+    "lookup_peers",
+    "PeerLookupResult",
 ]

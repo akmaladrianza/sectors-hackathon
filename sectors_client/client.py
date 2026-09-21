@@ -96,6 +96,59 @@ class SectorsClient:
             params = {"sections": ",".join(sections)}
         return self.request(url, params=params)
 
+    def get_news(
+        self,
+        symbols: Optional[list[str]] = None,
+        sub_sector: Optional[str] = None,
+        sector: Optional[str] = None,
+        keyword: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 5,
+    ) -> dict:
+        """Fetch IDX news articles from Sectors' own ``GET /v2/news/`` endpoint.
+
+        Filter by ticker ``symbols`` (comma-joined), ``sub_sector``/``sector`` slugs,
+        a case-insensitive title ``keyword``, ``tags``, and optional ``start``/``end``
+        ISO dates. Returns ``{results: [...], pagination: {...}}`` where each result
+        carries ``title``, ``body``, ``source`` (URL), ``timestamp``, ``sub_sector``,
+        ``tags`` and ``symbols``. This is the Sectors-native replacement for any
+        third-party news source.
+        """
+        params: dict = {"extension": "idx", "limit": str(limit)}
+        if symbols:
+            params["symbols"] = ",".join(symbols)
+        if sub_sector:
+            params["sub_sector"] = sub_sector
+        if sector:
+            params["sector"] = sector
+        if keyword:
+            params["keyword"] = keyword
+        if tags:
+            params["tags"] = ",".join(tags)
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        return self.request(f"{BASE_URL}/v2/news/", params=params)
+
+    def search_companies(
+        self, keyword: str, limit: int = 10
+    ) -> dict:
+        """List IDX companies whose name fuzzy-matches ``keyword``.
+
+        Uses the Companies Screener's structured SQL-like filter
+        ``company_name like '%<keyword>%'`` (case-insensitive). Returns the screener
+        payload; each result carries ``symbol``, ``company_name``, ``sub_sector`` etc.
+        Used to power the "type a company name -> suggested ticker" input.
+        """
+        params = {
+            "where": f"company_name like '%{keyword}%'",
+            "limit": str(limit),
+        }
+        return self.request(f"{BASE_URL}/v2/companies/", params=params)
+
     def get_sgx_company_report(
         self, symbol: str, sections: Optional[list[str]] = None
     ) -> dict:

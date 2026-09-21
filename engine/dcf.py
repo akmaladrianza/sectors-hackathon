@@ -51,6 +51,43 @@ def _discount(series_values: list[Decimal], r: Decimal) -> Decimal:
     return total
 
 
+def working_capital_days_to_margin(
+    ar_days: Decimal,
+    inventory_days: Decimal,
+    ap_days: Decimal,
+) -> Decimal:
+    """Net working capital as a fraction of revenue, from activity days.
+
+    ``NWC / revenue = (AR days + Inventory days - AP days) / 365``. This is the
+    working-capital loading applied to each projected year's revenue; the *change*
+    in NWC between consecutive years is the FCF hit, computed inside ``run_dcf``.
+
+    AR/AP days are labelled as approximations at the call site (Sectors does not
+    expose trade receivables/payables directly; they are derived as residual
+    current-asset / current-liability balances).
+    """
+    return (ar_days + inventory_days - ap_days) / Decimal(365)
+
+
+def nwc_change_margin_from_days(
+    ar_days: Decimal,
+    inventory_days: Decimal,
+    ap_days: Decimal,
+    growth_rate: Decimal,
+) -> Decimal:
+    """ΔNWC / revenue for a growing firm, from activity days.
+
+    With NWC = loading × revenue, the year-over-year change is
+    ``loading × Δrevenue = loading × revenue_prev × g``, so as a fraction of the
+    *current* year's revenue it is ``loading × g / (1 + g)``. This is the exact
+    ``nwc_change_margin`` that ``run_dcf`` expects for a growing revenue line.
+    """
+    loading = working_capital_days_to_margin(ar_days, inventory_days, ap_days)
+    if growth_rate == Decimal(0):
+        return Decimal(0)
+    return loading * growth_rate / (Decimal(1) + growth_rate)
+
+
 def run_dcf(
     revenue: Optional[Decimal],
     growth_rate: Decimal,
