@@ -32,23 +32,37 @@ def _subject() -> CompanyComp:
     )
 
 
+def _peer(ticker, price, eps, market_cap, book_equity, shares) -> CompanyComp:
+    """A lightweight bank peer with enough data to compute P/E and P/B."""
+    return CompanyComp(
+        ticker=ticker,
+        company_name=f"Bank {ticker}",
+        sector="Financials",
+        sub_sector="Banks",
+        price=Decimal(price),
+        eps=Decimal(eps),
+        market_cap=Decimal(market_cap),
+        total_equity=Decimal(book_equity),
+        shares_outstanding=Decimal(shares),
+    )
+
+
 def test_peer_price_ranges_invert_pe_multiples() -> None:
     subject = _subject()
+    # P/E peers: price/eps -> BBRI (10), BMRI (12), BBNI (8)
+    # P/B peers: market_cap/equity -> BBRI (2.0), BMRI (2.5), BBNI (1.5)
     peers = [
-        {"symbol": "BBRI", "pe": 10, "pb": 2, "enterprise_to_ebitda": None,
-         "enterprise_to_revenue": None},
-        {"symbol": "BMRI", "pe": 12, "pb": 2.5, "enterprise_to_ebitda": None,
-         "enterprise_to_revenue": None},
-        {"symbol": "BBNI", "pe": 8, "pb": 1.5, "enterprise_to_ebitda": None,
-         "enterprise_to_revenue": None},
+        _peer("BBRI.JK", 2000, 200, 200000000000000, 100000000000000, 100000000000),
+        _peer("BMRI.JK", 3000, 250, 300000000000000, 120000000000000, 100000000000),
+        _peer("BBNI.JK", 1500, 187.5, 150000000000000, 100000000000000, 100000000000),
     ]
     rows = peer_price_ranges(peers, subject)
     by_method = {r.method: r for r in rows}
 
     pe_row = by_method["P/E (peers)"]
     # peer P/E in [8, 12]; subject EPS 400 -> price in [3200, 4800]
-    assert pe_row.low == 3200.0, pe_row.low
-    assert pe_row.high == 4800.0, pe_row.high
+    assert abs(pe_row.low - 3200.0) < 0.01, pe_row.low
+    assert abs(pe_row.high - 4800.0) < 0.01, pe_row.high
 
     pb_row = by_method["P/B (peers)"]
     bvps = 280000000000000 / 120000000000  # ~2333.33
@@ -59,7 +73,7 @@ def test_peer_price_ranges_invert_pe_multiples() -> None:
 
 def test_football_field_adds_dcf_and_iv() -> None:
     subject = _subject()
-    peers = [{"symbol": "BBRI", "pe": 10, "pb": 2}]
+    peers = [_peer("BBRI.JK", 2000, 200, 200000000000000, 100000000000000, 100000000000)]
     rows, current, iv = build_football_field(
         subject, peers, dcf_price=Decimal("5200")
     )
@@ -89,10 +103,38 @@ def test_working_capital_days() -> None:
     print("PASS working-capital days -> loading + delta margin\n")
 
 
+def test_ev_range_degraded_when_no_shares() -> None:
+    """A subject with EBITDA/revenue but no shares_outstanding must not emit a
+    (None, None) EV row — it is omitted, and other rows degrade cleanly."""
+    subject = CompanyComp(
+        ticker="X.JK",
+        company_name="No Shares Co",
+        sector="Financials",
+        sub_sector="Banks",
+        ebitda=Decimal("1000"),
+        revenue=Decimal("100000"),
+        total_debt=Decimal("0"),
+        cash_and_equivalents=Decimal("0"),
+        shares_outstanding=None,
+    )
+    peers = [
+        _peer("BBRI.JK", 2000, 200, 200000000000000, 100000000000000, 100000000000),
+    ]
+    rows = peer_price_ranges(peers, subject)
+    # Every emitted row must have concrete low/high; no (None, None) rows may leak.
+    assert all(r.low is not None and r.high is not None for r in rows), rows
+    # The EV-based rows are correctly omitted (no shares to bridge EV -> price).
+    methods = {r.method for r in rows}
+    assert "EV/EBITDA (peers)" not in methods
+    assert "EV/Revenue (peers)" not in methods
+    print("PASS EV range omitted cleanly when shares_outstanding missing\n")
+
+
 def main() -> None:
     test_peer_price_ranges_invert_pe_multiples()
     test_football_field_adds_dcf_and_iv()
     test_working_capital_days()
+    test_ev_range_degraded_when_no_shares()
     print("ALL FOOTBALL-WC TESTS PASSED")
 
 

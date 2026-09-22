@@ -170,6 +170,7 @@ if run:
         try:
             st.session_state["result"] = screen_tickers(tickers, cache=cache, client=client)
             st.session_state["client"] = client
+            st.session_state["cache"] = cache
             st.session_state["has_run"] = True
         except Exception as exc:  # noqa: BLE001
             st.error(f"Could not run screener: {exc}")
@@ -178,6 +179,7 @@ if run:
 
 result = st.session_state.get("result")
 _client = st.session_state.get("client") or SectorsClient()
+_cache = st.session_state.get("cache")
 if result is None:
     # First load: show intro, no result yet.
     with st.expander("ℹ️ How to use this", expanded=True):
@@ -386,14 +388,25 @@ if _plotly_ok and subjects:
         peer_cache_key = f"peers_{c.ticker}"
         if peer_cache_key not in st.session_state:
             with st.spinner(f"Resolving peers for {c.ticker}…"):
-                st.session_state[peer_cache_key] = lookup_peers(c, _client)
+                st.session_state[peer_cache_key] = lookup_peers(
+                    c, _client, cache=_cache, limit=5
+                )
         pr = st.session_state[peer_cache_key]
         dcf_price = st.session_state.get(f"dcf_price_{c.ticker}")
 
-        rows, current, sectors_iv = build_football_field(c, pr.rows, dcf_price)
+        if not pr.has_peers:
+            st.info(f"{c.ticker}: {pr.reason or 'no screenable same-sub_sector peers'}.")
+            continue
+
+        rows, current, sectors_iv = build_football_field(c, pr.peers, dcf_price)
         if not rows:
             st.info(f"{c.ticker}: no same-sub_sector peers found to chart.")
             continue
+
+        _notes = f"{len(pr.peers)} peer(s)"
+        if pr.skipped:
+            _notes += f" ({len(pr.skipped)} skipped: {', '.join(pr.skipped[:4])})"
+        st.caption(f"{c.ticker}: {_notes}")
 
         fig = go.Figure()
         methods = [r.method for r in rows]
