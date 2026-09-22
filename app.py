@@ -257,6 +257,11 @@ if advanced:
         with st.expander(f"{c.ticker} — {c.company_name}"):
             # Sectors-native grounding (zero-hallucination): the cached facts a human
             # would use to pick growth, shown before the editable inputs.
+            st.caption(
+                f"Baseline financials: {c.fiscal_period or 'latest FY'} annual "
+                f"(revenue {float(c.revenue):,.0f} IDR). DCF projects from this "
+                "annual base; point-in-time price/market cap are current."
+            )
             if proxy.source:
                 st.caption(f"Growth heuristic: {proxy.source}")
             if c.intrinsic_value is not None:
@@ -385,13 +390,23 @@ except Exception:
 subjects = list(result.screenable) + [m.comp for m in result.miners]
 if _plotly_ok and subjects:
     for c in subjects:
-        peer_cache_key = f"peers_{c.ticker}"
-        if peer_cache_key not in st.session_state:
-            with st.spinner(f"Resolving peers for {c.ticker}…"):
-                st.session_state[peer_cache_key] = lookup_peers(
-                    c, _client, cache=_cache, limit=5
-                )
-        pr = st.session_state[peer_cache_key]
+        try:
+            peer_cache_key = f"peers_{c.ticker}"
+            if peer_cache_key not in st.session_state:
+                with st.spinner(f"Resolving peers for {c.ticker}…"):
+                    st.session_state[peer_cache_key] = lookup_peers(
+                        c, _client, cache=_cache, limit=5
+                    )
+            pr = st.session_state[peer_cache_key]
+        except Exception as exc:  # noqa: BLE001
+            # A transient peer-lookup failure must degrade this one chart, not crash
+            # the whole render (consistent with screener.py's graceful-degradation rule).
+            st.warning(
+                f"{c.ticker}: peer lookup failed ({type(exc).__name__}: {exc}) — "
+                "football field skipped for this ticker."
+            )
+            continue
+
         dcf_price = st.session_state.get(f"dcf_price_{c.ticker}")
 
         if not pr.has_peers:
@@ -508,3 +523,33 @@ else:
     st.error(f"Excel export failed: {_export_error}")
     with st.expander("Export error details", expanded=False):
         st.code(_traceback.format_exc())
+
+
+# --- Footer: build provenance (helps diagnose stale deploys) -----------------
+def _app_git_sha() -> str | None:
+    """Return the current commit's short SHA, or None if git metadata is absent.
+
+    Surfaces in the footer so a stale Streamlit-cloud deploy (serving an older
+    module set than the committed top-level app.py) is diagnosable at a glance.
+    """
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=2,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        if out.returncode == 0:
+            return out.stdout.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+st.divider()
+_sha = _app_git_sha()
+st.caption(
+    "Mimir · informational analysis, not financial advice · data from the Sectors API"
+    + (f" · build {_sha}" if _sha else "")
+)

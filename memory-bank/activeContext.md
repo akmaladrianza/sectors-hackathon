@@ -29,6 +29,25 @@ optional true-NAV (narrated, not built).
     by default), `engine/xlsx_export.py` (formula-driven DCF sheet), and reworked
     `app.py` (upper-right Mimir branding + explainer, `st.session_state` fix so Advanced
     sliders recompute live). New `tests/test_implied.py`. Full detail in `progress.md`.
+  - **Football-field chart fix + hardening** (this session): the chart initially rendered
+    empty (only two invisible single-point rows). Root cause — confirmed against the live
+    Sectors API, not assumed — is that the Companies Screener (`GET /v2/companies/`)
+    **never returns multiple fields** in its `results` (only `symbol`/`company_name`),
+    even though `pe`/`pb`/`enterprise_to_ebitda` etc. are valid `where`/`order_by` filters.
+    Fix: `engine/peer_lookup.py` now does a two-step resolution — screener for the ticker
+    list only, then `company_report` + `report_to_company_comp` per peer for real computed
+    multiples. Hardened `_range_from_ev` to omit `(None, None)` rows when the subject lacks
+    `shares_outstanding`; added `tests/test_football.py::test_ev_range_degraded_when_no_shares`.
+  - **Football-field crash hardening + provenance** (this session): the `lookup_peers(...)`
+    call in `app.py` was unwrapped (the only unguarded API call in the UI), so any
+    transient failure — a stale Streamlit-cloud deploy serving an older `peer_lookup.py`
+    without the `cache` kwarg, a network hiccup, a 5xx — crashed the whole render instead
+    of degrading. Fixed by wrapping the per-subject peer-lookup block in try/except that
+    emits `st.warning(...)` and skips just that ticker's chart. Added a footer build-SHA
+    (`git rev-parse --short HEAD`) and a per-company "Baseline financials: FYxxxx annual"
+    caption in Advanced mode so the DCF base period is explicit (it uses the **latest
+    fiscal-year annual** row, not a quarterly/TTM figure — quarterly data is *not*
+    implemented anywhere in the pipeline; see decisions below).
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon
@@ -205,3 +224,8 @@ plus Advanced mode (DCF + proxy library + citation-safe assistant) — is comple
   explicitly dropped.
 - Simple and Advanced modes share one calculation engine; Advanced exposes more editable
   assumptions, it does not run different logic.
+- **Verify API response shape before building on it** (hard-won lesson): the Sectors
+  Companies Screener accepts `pe`/`pb`/`enterprise_to_ebitda` as `where`/`order_by`
+  filters, but its `results` payload only ever contains `symbol` + `company_name` — the
+  multiples are *query-only*, never projected back into the response. Never assume a
+  filterable field is also a returned field; probe a live call before coding against it.
