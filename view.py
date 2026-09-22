@@ -45,6 +45,8 @@ def comps_rows(result: ScreenerResult) -> list[dict]:
                 "Ticker": c.ticker,
                 "Company": c.company_name,
                 "Sector": c.sector,
+                "Period": c.fiscal_period or "—",
+                "As of": c.as_of_date.isoformat() if c.as_of_date else "—",
                 "EV/EBITDA": _fmt_multiple(c.ev_to_ebitda),
                 "EV/Revenue": _fmt_multiple(c.ev_to_revenue),
                 "P/E": _fmt_multiple(c.pe_ratio),
@@ -66,6 +68,7 @@ def mining_rows(result: ScreenerResult) -> list[dict]:
             {
                 "Ticker": m.comp.ticker,
                 "Company": m.overlay.company_name or m.comp.company_name,
+                "Period": m.comp.fiscal_period or "—",
                 "Commodities": ", ".join(m.overlay.commodity_types),
                 "Reserves (Mt)": float(m.overlay.total_reserves_Mt)
                 if m.overlay.total_reserves_Mt is not None
@@ -125,6 +128,8 @@ def implied_valuation_rows(result: ScreenerResult) -> list[dict]:
         rows.append(
             {
                 "Ticker": c.ticker,
+                "Period": c.fiscal_period or "—",
+                "As of": c.as_of_date.isoformat() if c.as_of_date else "—",
                 "Current price": _fmt_price(current),
                 "Implied low": _fmt_price(low),
                 "Implied high": _fmt_price(high),

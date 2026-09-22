@@ -21,16 +21,61 @@ import view
 from cache.sqlite_cache import SQLiteCache
 from screener.screener import screen_tickers
 from engine.proxy_library import default_growth
-from engine.dcf import run_dcf, nwc_change_margin_from_days
+from engine.dcf import run_dcf, nwc_change_margin_from_days, estimate_working_capital_days
 from engine.xlsx_export import write_dcf_sheet
 from engine.football_field import build_football_field
 from engine.peer_lookup import lookup_peers
 from sectors_client.client import SectorsClient
+
+# Self-healing guard against a stale-import failure: if the running process somehow
+# bound an *older* `lookup_peers` (one without the `cache` kwarg — a known signature
+# added later, and the exact cause of a past `TypeError: unexpected keyword argument
+# 'cache'` on a long-lived Streamlit deploy), reload the module from disk so the call
+# in the football-field block matches the on-disk code. No-op when the signature is
+# already correct; it repairs a stale binding without changing runtime behaviour.
+import inspect as _inspect  # noqa: E402
+import importlib as _importlib  # noqa: E402
+import engine.peer_lookup as _peer_lookup_module  # noqa: E402
+try:
+    _sig = _inspect.signature(lookup_peers)
+    _has_cache_kwarg = "cache" in _sig.parameters
+except (TypeError, ValueError):
+    _has_cache_kwarg = False
+if not _has_cache_kwarg:
+    _peer_lookup_module = _importlib.reload(_peer_lookup_module)
+    lookup_peers = _peer_lookup_module.lookup_peers
 import assistant
 import sectors_news
 
 DEFAULT_TICKERS = "BBCA, BBNI, BRIS"
 CACHE_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "sectors_cache.db")
+
+# US-style comma-separated number rendering for the dataframe tables.
+_PRICE_FORMAT = "%,.0f"      # e.g. 13,694
+_MULTIPLE_FORMAT = "%.2f"    # e.g. 9.28 (multiples are small ratios, not currency)
+_PCT_FORMAT = "%.2f%%"       # upside as a percent (signed)
+
+from streamlit.column_config import NumberColumn  # noqa: E402
+
+
+def _comps_column_config() -> dict:
+    """Number formatting for the comps/implied tables (US comma separators)."""
+    return {
+        "EV/EBITDA": NumberColumn(format=_MULTIPLE_FORMAT),
+        "EV/Revenue": NumberColumn(format=_MULTIPLE_FORMAT),
+        "P/E": NumberColumn(format=_MULTIPLE_FORMAT),
+        "P/B": NumberColumn(format=_MULTIPLE_FORMAT),
+        "Sectors IV": NumberColumn(format=_PRICE_FORMAT),
+        "Current price": NumberColumn(format=_PRICE_FORMAT),
+        "Implied low": NumberColumn(format=_PRICE_FORMAT),
+        "Implied high": NumberColumn(format=_PRICE_FORMAT),
+        "Upside": NumberColumn(format=_PCT_FORMAT),
+        "EV/tonne (reserves)": NumberColumn(format=_MULTIPLE_FORMAT),
+        "EV/tonne (resources)": NumberColumn(format=_MULTIPLE_FORMAT),
+        "Reserves (Mt)": NumberColumn(format="%,.2f"),
+        "Resources (Mt)": NumberColumn(format="%,.2f"),
+    }
+
 
 st.set_page_config(page_title="Mimir — Comps Screener", layout="wide")
 
@@ -198,7 +243,10 @@ if result is None:
 st.subheader("Comparable companies")
 comps_df = view.to_dataframe(result)
 if not comps_df.empty:
-    st.dataframe(comps_df, use_container_width=True, hide_index=True)
+    st.dataframe(
+        comps_df, use_container_width=True, hide_index=True,
+        column_config=_comps_column_config(),
+    )
     st.caption(
         "**Sectors IV** = Sectors' own disclosed fair-value estimate per share. "
         "**Upside** = (Sectors IV ÷ current price) − 1. Both are Sectors-native "
@@ -219,7 +267,10 @@ if len(result.screenable) + len(result.miners) < 2:
         "available, is still shown in the comps table above."
     )
 elif not implied_df.empty:
-    st.dataframe(implied_df, use_container_width=True, hide_index=True)
+    st.dataframe(
+        implied_df, use_container_width=True, hide_index=True,
+        column_config=_comps_column_config(),
+    )
     st.caption(
         "Implied prices are peer-median-multiple inversions (excluding the subject) "
         "combined with Sectors' own intrinsic value. Verdict is informational only — "
@@ -230,7 +281,10 @@ elif not implied_df.empty:
 if result.miners:
     st.subheader("Mining overlay (reserve-adjusted)")
     mining_df = view.to_mining_dataframe(result)
-    st.dataframe(mining_df, use_container_width=True, hide_index=True)
+    st.dataframe(
+        mining_df, use_container_width=True, hide_index=True,
+        column_config=_comps_column_config(),
+    )
     st.caption(
         "Reserve figures are company self-reported (not independently audited) "
         "and carry a measurement-vintage year. Tonnage is Mt of ore, not metal content."
@@ -314,15 +368,36 @@ if advanced:
                 _capex_default = float(capex_sugg.value) if capex_sugg and capex_sugg.available else 0.15
                 cx = st.number_input("Capex (% of revenue)", 0.0, 1.0, value=_capex_default,
                                      step=0.01, key=f"cx_{c.ticker}")
-                # Working-capital breakdown into AR / Inventory / AP days.
-                st.caption("Working capital (days). AR/AP are *approximated* — Sectors "
-                           "does not expose trade receivables/payables directly.")
-                ar_days = st.number_input("AR days", 0.0, 365.0, value=30.0,
-                                          step=1.0, key=f"ar_{c.ticker}")
-                inv_days = st.number_input("Inventory days", 0.0, 365.0, value=30.0,
-                                           step=1.0, key=f"inv_{c.ticker}")
-                ap_days = st.number_input("AP days", 0.0, 365.0, value=30.0,
-                                          step=1.0, key=f"ap_{c.ticker}")
+                # Working-capital breakdown into AR / Inventory / AP days, seeded from
+                # the balance sheet where derivable (residual current assets/liabilities).
+                _est_ar, _est_inv, _est_ap = estimate_working_capital_days(
+                    revenue=c.revenue,
+                    cost_of_revenue=c.cost_of_revenue,
+                    inventories=c.inventories,
+                    current_assets=c.current_assets,
+                    current_liabilities=c.current_liabilities,
+                    cash_and_equivalents=c.cash_and_equivalents,
+                    prepaid_assets=c.prepaid_assets,
+                    short_term_debt=c.short_term_debt,
+                )
+                _cap_note = (
+                    "Working capital (days), estimated from the balance sheet "
+                    "(AR = residual current assets; AP = residual current liabilities). "
+                    "Editable."
+                )
+                st.caption(_cap_note)
+                ar_days = st.number_input(
+                    "AR days", 0.0, 365.0, value=_est_ar if _est_ar is not None else 30.0,
+                    step=1.0, key=f"ar_{c.ticker}",
+                )
+                inv_days = st.number_input(
+                    "Inventory days", 0.0, 365.0, value=_est_inv if _est_inv is not None else 30.0,
+                    step=1.0, key=f"inv_{c.ticker}",
+                )
+                ap_days = st.number_input(
+                    "AP days", 0.0, 365.0, value=_est_ap if _est_ap is not None else 30.0,
+                    step=1.0, key=f"ap_{c.ticker}",
+                )
                 nw = nwc_change_margin_from_days(
                     Decimal(str(ar_days)),
                     Decimal(str(inv_days)),
@@ -508,6 +583,8 @@ try:
                 years=5,
                 shares_outstanding=c.shares_outstanding,
                 net_debt=net_debt_val,
+                fiscal_period=c.fiscal_period,
+                as_of_date=c.as_of_date.isoformat() if c.as_of_date else None,
             )
 except Exception as exc:  # noqa: BLE001
     _export_error = exc

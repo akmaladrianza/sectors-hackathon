@@ -23,6 +23,7 @@ from typing import Optional, Tuple
 from pydantic import ValidationError
 
 from models.company_comp import CompanyComp, Currency
+from growth import revenue_cagr
 
 
 class Template(str, Enum):
@@ -118,10 +119,19 @@ class ReportMapper:
                 total_assets=_dec(row.get("total_assets")) if row else None,
                 total_liabilities=_dec(row.get("total_liabilities")) if row else None,
                 total_equity=_dec(row.get("total_equity")) if row else None,
+                current_assets=_dec(row.get("current_assets")) if row else None,
+                current_liabilities=_dec(row.get("current_liabilities")) if row else None,
+                inventories=_dec(row.get("inventories")) if row else None,
+                cost_of_revenue=_dec(row.get("cost_of_revenue")) if row else None,
+                prepaid_assets=_dec(row.get("prepaid_assets")) if row else None,
+                short_term_debt=_dec(row.get("short_term_debt")) if row else None,
                 revenue=_dec(row.get("revenue")) if row else None,
                 ebitda=_dec(row.get("ebitda")) if row else None,
                 ebit=_dec(row.get("ebit")) if row else None,
                 net_income=_dec(row.get("earnings")) if row else None,
+                revenue_growth_yoy=revenue_cagr(
+                    financials.get("historical_financials")
+                ),
                 eps=_dec(financials.get("eps")),
                 intrinsic_value=_dec(valuation.get("intrinsic_value")),
                 forward_pe=self._to_float(valuation.get("forward_pe")),

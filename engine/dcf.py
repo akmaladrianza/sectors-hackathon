@@ -51,6 +51,76 @@ def _discount(series_values: list[Decimal], r: Decimal) -> Decimal:
     return total
 
 
+def estimate_working_capital_days(
+    *,
+    revenue=None,
+    cost_of_revenue=None,
+    inventories=None,
+    current_assets=None,
+    current_liabilities=None,
+    cash_and_equivalents=None,
+    prepaid_assets=None,
+    short_term_debt=None,
+):
+    """Estimate AR / Inventory / AP days from the balance-sheet fields Sectors exposes.
+
+    Sectors' ``historical_financials`` row never gives ``accounts_receivable`` /
+    ``accounts_payable`` directly, but it does expose enough of the current-asset /
+    current-liability block to derive *residual* receivables and payables:
+
+    - ``inventory_days = inventories / cost_of_revenue * 365``  (direct, no
+      approximation — drops to None when ``inventories`` or ``cost_of_revenue`` is
+      missing, e.g. banks).
+    - ``ar_days``: residual current assets = ``current_assets - cash -
+      inventories - prepaid_assets`` (a standard "receivables + other current assets"
+      proxy). ``ar_days = residual / revenue * 365``.
+    - ``ap_days``: residual payables = ``current_liabilities - short_term_debt`` (the
+      non-interest-bearing current liabilities). ``ap_days = residual /
+      cost_of_revenue * 365``, falling back to ``revenue`` when ``cost_of_revenue`` is
+      missing.
+
+    Every leg degrades to ``None`` rather than fabricating a number, mirroring the
+    project's None-propagation rule. Returns ``(ar_days, inv_days, ap_days)`` as
+    ``float | None``. Any negative residual (e.g. cash > current assets) is treated as
+    "not derivable" and returns None for that leg rather than a nonsensical negative.
+    """
+    def _days(balance, flow) -> Optional[float]:
+        if balance is None or flow is None:
+            return None
+        try:
+            b = float(balance)
+            f = float(flow)
+        except (TypeError, ValueError):
+            return None
+        if b < 0 or f <= 0:
+            return None
+        return round(b / f * 365.0, 1)
+
+    inv_days = _days(inventories, cost_of_revenue)
+
+    # AR: residual current assets minus cash/inventories/prepaid.
+    ar_balance = None
+    if current_assets is not None:
+        residual = current_assets
+        for sub in (cash_and_equivalents, inventories, prepaid_assets):
+            if residual is not None and sub is not None:
+                residual = residual - sub
+        ar_balance = residual
+    ar_days = _days(ar_balance, revenue)
+
+    # AP: residual current liabilities minus short-term debt.
+    ap_balance = None
+    if current_liabilities is not None:
+        residual = current_liabilities
+        if short_term_debt is not None:
+            residual = residual - short_term_debt
+        ap_balance = residual
+    ap_flow = cost_of_revenue if cost_of_revenue is not None else revenue
+    ap_days = _days(ap_balance, ap_flow)
+
+    return ar_days, inv_days, ap_days
+
+
 def working_capital_days_to_margin(
     ar_days: Decimal,
     inventory_days: Decimal,

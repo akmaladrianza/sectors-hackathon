@@ -83,6 +83,18 @@ class CompanyComp(BaseModel):
         "Used for a true price-to-book ratio instead of the total_assets approximation."
     )
 
+    # --- Working-capital inputs (raw, latest fiscal-year row) ----------------
+    # Exposed so the DCF can derive AR/Inventory/AP days from *real* balance-sheet
+    # fields (residual receivables/payables) rather than a flat placeholder. Sectors
+    # does not surface trade receivables/payables directly; these are the closest
+    # disclosures. All optional; banks typically leave cost_of_revenue/inventories absent.
+    current_assets: Optional[Decimal] = Field(None, ge=0, description="Current assets")
+    current_liabilities: Optional[Decimal] = Field(None, ge=0, description="Current liabilities")
+    inventories: Optional[Decimal] = Field(None, ge=0, description="Inventories")
+    cost_of_revenue: Optional[Decimal] = Field(None, ge=0, description="Cost of revenue")
+    prepaid_assets: Optional[Decimal] = Field(None, ge=0, description="Prepaid assets")
+    short_term_debt: Optional[Decimal] = Field(None, ge=0, description="Short-term interest-bearing debt")
+
     # --- Income statement / profitability (raw, TTM) ----------------------
     revenue: Optional[Decimal] = Field(None, ge=0, description="Trailing-twelve-month revenue")
     ebitda: Optional[Decimal] = Field(None, description="TTM EBITDA")
@@ -188,6 +200,23 @@ class CompanyComp(BaseModel):
         if self.price is None or not self.eps or self.eps == 0:
             return None
         return float(self.price / self.eps)
+
+    @computed_field
+    @property
+    def roe(self) -> Optional[float]:
+        """Return on equity = net_income / total_equity (book value of equity).
+
+        The quality driver behind P/B: per the Gordon-growth-derived "justified P/B"
+        relationship (``P/B = (ROE - g) / (r - g)``), a company's fair P/B is a
+        function of its *own* ROE, not a peer-group average. Used by
+        ``engine.implied_valuation`` to normalize peer P/B multiples by ROE before
+        applying them to a subject with a different (often higher, for a market
+        leader) ROE. ``None`` if net income or a usable (positive) book equity is
+        missing — never a fabricated ratio.
+        """
+        if self.net_income is None or not self.total_equity or self.total_equity <= 0:
+            return None
+        return float(self.net_income / self.total_equity)
 
     @computed_field
     @property

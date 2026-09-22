@@ -48,6 +48,7 @@ def test_comps_rows_shape_and_rounding() -> None:
     r = rows[0]
     assert r["Ticker"] == "BBCA.JK"
     assert r["Company"] == "Test"
+    assert "Period" in r and "As of" in r
     # ev_to_ebitda = EV/ebitda = (1T + 0.1T - 0.1T)/0.1T = 1T/0.1T = 10.0
     assert r["EV/EBITDA"] == 10.0
     # P/E = price/eps = 1000/100 = 10.0

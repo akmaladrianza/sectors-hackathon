@@ -36,15 +36,26 @@ def write_dcf_sheet(
     years: int = 5,
     shares_outstanding: Optional[Decimal] = None,
     net_debt: Optional[Decimal] = None,
+    fiscal_period: Optional[str] = None,
+    as_of_date: Optional[str] = None,
 ) -> None:
     """Write a formula-driven 2-stage DCF onto a workbook via an openpyxl writer.
 
     Layout: assumption cells in column B (rows 2..8), then a per-year projection
     block with formulas, terminal value, and the intrinsic EV / equity / price cells.
+    Financial-period provenance (fiscal period / as-of date) is written into columns
+    D/E so the formula anchor cells ($B$2..$B$7) never shift.
     """
     from openpyxl.utils import get_column_letter
 
     ws = writer.book.create_sheet(sheet_name)
+
+    # --- Data provenance (financial period the DCF is built on) -------------
+    if fiscal_period or as_of_date:
+        ws["D1"] = "Financial period"
+        ws["E1"] = fiscal_period or ""
+        ws["D2"] = "As of"
+        ws["E2"] = as_of_date or ""
 
     # --- Assumptions --------------------------------------------------------
     ws["A1"] = "Assumption"

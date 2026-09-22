@@ -14,7 +14,7 @@ from engine.proxy_library import (
     BANK_GROWTH_SPREAD,
     COMMODITY_PRICE_GROWTH,
 )
-from engine.dcf import run_dcf
+from engine.dcf import run_dcf, estimate_working_capital_days
 from models.company_comp import CompanyComp
 from models.mining_overlay import MiningOverlay, CommodityStat
 
@@ -125,6 +125,42 @@ def test_dcf_requires_valid_rates() -> None:
     print("PASS DCF validation: bad rates / missing revenue -> None with reason\n")
 
 
+def test_working_capital_days_estimator() -> None:
+    """Residual AR/AP + direct inventory days from the balance-sheet block."""
+    # revenue 365, cost_of_revenue 365 -> every day maps 1.0 of balance.
+    rev = Decimal("365")
+    cor = Decimal("365")
+    # Residual current assets: 100 - cash 10 - inv 20 - prepaid 5 = 65 -> AR days 65.
+    # Inventory 20 -> inventory days 20.
+    # Residual current liabilities: 50 - short_term_debt 10 = 40 -> AP days 40.
+    ar, inv, ap = estimate_working_capital_days(
+        revenue=rev,
+        cost_of_revenue=cor,
+        inventories=Decimal("20"),
+        current_assets=Decimal("100"),
+        current_liabilities=Decimal("50"),
+        cash_and_equivalents=Decimal("10"),
+        prepaid_assets=Decimal("5"),
+        short_term_debt=Decimal("10"),
+    )
+    assert ar == 65.0, ar
+    assert inv == 20.0, inv
+    assert ap == 40.0, ap
+
+    # Degrade: none of the fields -> all None.
+    ar2, inv2, ap2 = estimate_working_capital_days()
+    assert ar2 is None and inv2 is None and ap2 is None
+
+    # Negative residual (cash > current assets) -> None, not a bogus negative.
+    ar3, inv3, ap3 = estimate_working_capital_days(
+        revenue=rev,
+        current_assets=Decimal("5"),
+        cash_and_equivalents=Decimal("100"),
+    )
+    assert ar3 is None and inv3 is None
+    print("PASS working-capital days estimator (residual AR/AP + direct inventory)\n")
+
+
 def main() -> None:
     test_bank_proxy_uses_gdp_plus_spread()
     test_generic_proxy_is_historical_cagr()
@@ -133,6 +169,7 @@ def main() -> None:
     test_miner_proxy_no_history()
     test_dcf_positive()
     test_dcf_requires_valid_rates()
+    test_working_capital_days_estimator()
     print("ALL ADVANCED-MODE TESTS PASSED")
 
 

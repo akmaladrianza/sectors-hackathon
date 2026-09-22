@@ -23,6 +23,7 @@ from typing import Optional
 
 from models.company_comp import CompanyComp
 from models.mining_overlay import MiningOverlay
+from growth import revenue_series as _revenue_series_fn
 
 
 # --- Documented assumption constants ---------------------------------------
@@ -54,6 +55,7 @@ class Proxy:
 
 
 def _dec(v) -> Optional[Decimal]:
+    """Local Decimal coercion (kept for the proxy's own value formatting)."""
     if v is None:
         return None
     if isinstance(v, Decimal):
@@ -64,29 +66,17 @@ def _dec(v) -> Optional[Decimal]:
         return None
 
 
+# Historical-growth helpers are shared with ``mapper.mapper`` via ``growth`` so the
+# mapper doesn't trigger an engine-package import cycle. Re-exported below so the
+# proxy library keeps a single, documented entry point for DCF-default callers.
 def _revenue_series(raw_hist: Optional[list]) -> list[Decimal]:
-    """Extract an ordered (year, revenue) series from ``historical_financials``."""
-    series = []
-    for row in raw_hist or []:
-        rev = _dec(row.get("revenue"))
-        year = row.get("year")
-        if rev is not None and rev > 0 and year is not None:
-            series.append((year, rev))
-    series.sort(key=lambda t: t[0])
-    return [rev for _year, rev in series]
+    return _revenue_series_fn(raw_hist)
 
 
 def _cagr(series: list[Decimal]) -> Optional[Decimal]:
-    """Compound annual growth rate over a revenue series; None if too short."""
-    if len(series) < 2:
-        return None
-    first, last = series[0], series[-1]
-    years = len(series) - 1
-    if first <= 0 or last <= 0:
-        return None
-    # (last/first)^(1/years) - 1
-    ratio = last / first
-    return (ratio ** (Decimal(1) / Decimal(years))) - Decimal(1)
+    from growth import cagr
+
+    return cagr(series)
 
 
 def classify_proxy(

@@ -48,6 +48,44 @@ optional true-NAV (narrated, not built).
     caption in Advanced mode so the DCF base period is explicit (it uses the **latest
     fiscal-year annual** row, not a quarterly/TTM figure — quarterly data is *not*
     implemented anywhere in the pipeline; see decisions below).
+  - **Valuation + working-capital + presentation fix** (this session):
+    - *Implied band de-biased*: `ImpliedValuation.implied_low`/`implied_high` now use
+      **comps-derived prices only** — Sectors' own `intrinsic_value` is excluded from
+      the min/max and shown as a standalone column. The old behaviour let a premium
+      name (BBCA) carry an inflated ceiling (its own Sectors IV) into the band, so it
+      always read "fairly valued". New `comps_prices` property; `implied_prices` kept
+      for backward compatibility.
+    - *Working-capital days derivable*: `engine/dcf.py::estimate_working_capital_days`
+      derives AR (residual current assets), Inventory (direct), AP (residual current
+      liabilities) from `historical_financials` fields; `CompanyComp` + mapper now carry
+      `current_assets`/`current_liabilities`/`inventories`/`cost_of_revenue`/
+      `prepaid_assets`/`short_term_debt`. Advanced-mode AR/Inventory/AP inputs are now
+      seeded from these estimates (still editable) instead of a flat 30-day default.
+    - *Period visibility*: `fiscal_period` + `as_of_date` columns added to the comps,
+      implied, and mining tables (`view.py`) and to the xlsx `DCF {}` sheets
+      (`write_dcf_sheet` writes "Financial period"/"As of" into columns D/E).
+    - *US comma separators*: `st.column_config.NumberColumn` formatting (`%,.0f` for
+      prices, `%.2f` for multiples) applied to all three dataframe tables in `app.py`.
+    - *Stale-import self-heal*: `app.py` guards the `lookup_peers` import, reloading the
+      module if the bound signature lacks the `cache` kwarg (the prior `TypeError` cause).
+  - **Quality-normalized comps (PEG / justified-P/B / margin growth)** (this session):
+    - **Problem**: a raw peer-median multiple misprices any market leader / premium
+      incumbent whose quality driver (ROE / growth / margin) sits above its peer average
+      — the peer median reflects *average* quality, not the subject's own. Generalizes the
+      BBCA case (high-ROE bank dragged down by small low-ROE-bank peers' P/B) to every
+      dominant company in every sector.
+    - **Fix**: `engine/implied_valuation.comps_implied_prices()` now normalizes each
+      multiple by its quality driver before taking the peer median, then re-applies at the
+      subject's own driver: P/E by growth (PEG), P/B by ROE (justified P/B,
+      `(ROE-g)/(r-g)`), EV/EBITDA by growth, EV/Revenue by EBITDA margin. Falls back to the
+      raw median when the driver is unavailable (never a hard failure); `source` strings
+      record which mode produced each number.
+    - Added `CompanyComp.roe` (computed `net_income/total_equity`); mapper now populates
+      `revenue_growth_yoy` via a shared `growth.py` CAGR helper (extracted out of
+      `engine/proxy_library.py` *specifically* to break an `engine`↔`mapper` import cycle —
+      `growth.py` lives at repo root, no model imports).
+    - Live BBCA check (before → after): P/B leg rose from 2,105 → 10,298 (ROE 20.4% vs
+      peers' 2–7%); band tightened from [2,105..13,694] to [2,222..10,328].
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon
