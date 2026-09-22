@@ -257,6 +257,12 @@ if not comps_df.empty:
 else:
     st.write("No screenable (non-mining) peers.")
 
+# --- Data-quality warnings (non-fatal, e.g. negative Sectors intrinsic value) ---
+_flagged = [c for c in result.screenable if c.data_quality_flags]
+for c in _flagged:
+    for flag in c.data_quality_flags:
+        st.warning(f"{c.ticker}: {flag}")
+
 # --- Implied valuation (target vs current price) ---------------------------
 st.subheader("Implied valuation (target vs current price)")
 implied_df = view.to_implied_dataframe(result)
@@ -450,10 +456,12 @@ if advanced:
 # --- Football field (industry-matched valuation ranges) ---------------------
 st.subheader("Valuation football field")
 st.caption(
-    "Each bar spans the min–max implied share price from **same-sub_sector peers** "
-    "(sourced from Sectors, not the ticker list you typed) inverted via the subject's "
-    "own figures. The ▲ marker is the current price; DCF (Advanced mode) and Sectors IV "
-    "are single-point methods. Chart is informational, not a recommendation."
+    "Each bar spans the **interquartile range (25th–75th percentile)** of "
+    "growth/ROE/margin-normalized implied prices from same-industry peers (sourced from "
+    "Sectors, not the ticker list you typed), inverted via the subject's own figures "
+    "— so a single outlier peer can't blow up the range. The ▲ marker is the current "
+    "price; DCF (Advanced mode) and Sectors IV are single-point methods. Informational, "
+    "not a recommendation."
 )
 
 _plotly_ok = True
@@ -521,7 +529,12 @@ if _plotly_ok and subjects:
                     x=[current],
                     y=[methods[0] if methods else 0],
                     mode="markers",
-                    marker=dict(symbol="triangle-up", size=14, color="#1f1e1b"),
+                    marker=dict(
+                        symbol="triangle-up",
+                        size=15,
+                        color="#2563eb",
+                        line=dict(width=1.5, color="#ffffff"),
+                    ),
                     name="Current price",
                     hovertemplate="Current: %{x:,.0f}<extra></extra>",
                 )

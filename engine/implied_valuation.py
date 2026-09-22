@@ -282,11 +282,19 @@ def comps_implied_prices(
 def build_implied_valuation(
     subject: CompanyComp, peers: list[CompanyComp]
 ) -> ImpliedValuation:
-    """Assemble the full implied-valuation view for one subject company."""
+    """Assemble the full implied-valuation view for one subject company.
+
+    A negative ``intrinsic_value`` (Sectors signalling distress/over-leverage) is not a
+    usable fair-value benchmark, so ``sectors_intrinsic`` degrades to ``None`` rather
+    than leaking a nonsensical negative "fair price" into the panel or band.
+    """
     comps = comps_implied_prices(subject, peers)
+    iv = subject.intrinsic_value
+    if iv is not None and iv <= 0:
+        iv = None
     return ImpliedValuation(
         ticker=subject.ticker,
         current_price=subject.price,
         comps_implied=comps,
-        sectors_intrinsic=subject.intrinsic_value,
+        sectors_intrinsic=iv,
     )

@@ -60,15 +60,34 @@ def test_peer_price_ranges_invert_pe_multiples() -> None:
     by_method = {r.method: r for r in rows}
 
     pe_row = by_method["P/E (peers)"]
-    # peer P/E in [8, 12]; subject EPS 400 -> price in [3200, 4800]
-    assert abs(pe_row.low - 3200.0) < 0.01, pe_row.low
-    assert abs(pe_row.high - 4800.0) < 0.01, pe_row.high
+    # peer P/E sorted [8, 10, 12]; IQR 25th=9, 75th=11; subject EPS 400 -> [3600, 4400]
+    assert abs(pe_row.low - 3600.0) < 0.01, pe_row.low
+    assert abs(pe_row.high - 4400.0) < 0.01, pe_row.high
 
     pb_row = by_method["P/B (peers)"]
     bvps = 280000000000000 / 120000000000  # ~2333.33
-    assert abs(pb_row.low - (1.5 * bvps)) < 0.01
-    assert abs(pb_row.high - (2.5 * bvps)) < 0.01
-    print("PASS peer P/E + P/B price-range inversion\n")
+    # P/B sorted [1.5, 2.0, 2.5]; IQR 25th=1.75, 75th=2.25
+    assert abs(pb_row.low - (1.75 * bvps)) < 0.01
+    assert abs(pb_row.high - (2.25 * bvps)) < 0.01
+    print("PASS peer P/E + P/B price-range inversion (IQR, not min/max)\n")
+
+
+def test_football_field_resists_outlier_peer() -> None:
+    """A single absurd-multiple peer must not blow up the range (TKIM/ALKA case)."""
+    subject = _subject()
+    peers = [
+        _peer("BBRI.JK", 2000, 200, 200000000000000, 100000000000000, 100000000000),  # P/E 10
+        _peer("BMRI.JK", 3000, 250, 300000000000000, 120000000000000, 100000000000),  # P/E 12
+        # Outlier: P/E 100 (nano-cap), should be IQR-clipped away.
+        _peer("ALKA.JK", 100000, 1000, 100000000000000, 100000000000000, 100000000000),
+    ]
+    rows = peer_price_ranges(peers, subject)
+    pe_row = next(r for r in rows if r.method == "P/E (peers)")
+    # IQR of [10, 12, 100] = [11, 56]; the 100 outlier can no longer set the ceiling at
+    # 100*400 = 40000. The 75th percentile (56) bounds it instead.
+    assert pe_row.high < 40000.0, pe_row.high
+    assert pe_row.high == 56.0 * 400.0, pe_row.high
+    print("PASS football-field resists outlier peer (IQR clipping)\n")
 
 
 def test_football_field_adds_dcf_and_iv() -> None:
@@ -132,6 +151,7 @@ def test_ev_range_degraded_when_no_shares() -> None:
 
 def main() -> None:
     test_peer_price_ranges_invert_pe_multiples()
+    test_football_field_resists_outlier_peer()
     test_football_field_adds_dcf_and_iv()
     test_working_capital_days()
     test_ev_range_degraded_when_no_shares()

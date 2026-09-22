@@ -157,6 +157,25 @@ def main():
             raise AssertionError(f"Expected ValidationError for {kwargs}")
     print("PASS validation: empty-string identifiers rejected")
 
+    # 10b. Negative intrinsic_value (Sectors distress/over-leverage signal) is accepted
+    #     at the model layer (no crash) but surfaced as a non-fatal data-quality flag
+    #     and excluded from intrinsic_upside rather than producing a bogus gain.
+    neg_iv = CompanyComp(
+        ticker="INKP.JK",
+        company_name="Indah Kiat",
+        sector="Basic Materials",
+        market_cap=Decimal("1000"),
+        ebitda=Decimal("100"),
+        revenue=Decimal("500"),
+        price=Decimal("8575"),
+        intrinsic_value=Decimal("-29670"),
+    )
+    assert neg_iv.intrinsic_value == Decimal("-29670")  # stored, not rejected
+    assert neg_iv.intrinsic_upside is None  # negative IV is unusable
+    assert neg_iv.is_screenable is True  # still screenable on EV multiples
+    assert any("negative Sectors intrinsic value" in f for f in neg_iv.data_quality_flags)
+    print("PASS negative intrinsic value: flagged + excluded from upside, not a crash")
+
     # 10. ev_to_revenue / exclusion_reasons symmetry: missing revenue is now a
     #     first-class exclusion reason (previously only market_cap/ebitda were).
     no_revenue = CompanyComp(

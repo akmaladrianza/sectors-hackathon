@@ -122,7 +122,7 @@ class CompanyComp(BaseModel):
     # comps benchmark. They are load-bearing, defensible inputs (Sectors-native),
     # distinct from the ``computed_field`` multiples below which we derive locally.
     intrinsic_value: Optional[Decimal] = Field(
-        None, ge=0, description="Sectors' own fair-value / intrinsic share price"
+        None, description="Sectors' own fair-value / intrinsic share price"
     )
     forward_pe: Optional[float] = Field(None, description="Sectors' forward P/E")
     pe_peer_avg: Optional[float] = Field(None, description="Sectors' P/E peer average")
@@ -240,10 +240,19 @@ class CompanyComp(BaseModel):
 
         ``(intrinsic_value / price) - 1`` as a signed fraction (e.g. ``0.12`` for
         +12%). ``None`` if either the price or the disclosed intrinsic value is
-        missing/zero. This is a Sectors-native comparison (their own fair-value
+        missing/non-positive. This is a Sectors-native comparison (their own fair-value
         figure against their own last-close price), not our forecast.
+
+        A **negative** ``intrinsic_value`` (Sectors occasionally returns one, e.g. for
+        distressed/over-levered names whose own model yields a negative fair-value) is
+        treated as unusable — it is not a meaningful "fair price" to compute upside
+        against, so it degrades to ``None`` rather than producing a nonsensical gain.
         """
-        if self.price is None or not self.intrinsic_value or self.intrinsic_value == 0:
+        if (
+            self.price is None
+            or self.intrinsic_value is None
+            or self.intrinsic_value <= 0
+        ):
             return None
         return float(self.intrinsic_value / self.price - 1)
 
@@ -283,6 +292,25 @@ class CompanyComp(BaseModel):
         elif self.revenue <= 0:
             reasons.append("non-positive revenue")
         return reasons
+
+    @computed_field
+    @property
+    def data_quality_flags(self) -> list[str]:
+        """Non-fatal data-quality warnings (do NOT make the company unscreenable).
+
+        Distinct from ``exclusion_reasons`` (hard exclusions that gate
+        ``is_screenable``). These are soft warnings surfaced in the UI so a user knows
+        *why* a specific Sectors-native field (most notably ``intrinsic_value``) was
+        treated as unusable, without dropping an otherwise screenable company. A
+        negative ``intrinsic_value`` — typically Sectors signalling distress or a
+        heavy leverage burden — falls here: we exclude that number from the
+        implied-valuation/Sectors-IV path, but the company's comps multiples remain
+        valid.
+        """
+        flags: list[str] = []
+        if self.intrinsic_value is not None and self.intrinsic_value < 0:
+            flags.append("negative Sectors intrinsic value (excluded from Sectors-IV comparison)")
+        return flags
 
     # --- Serialization: float semantics for Decimal monetary fields -------
     @field_serializer("market_cap", "price", "shares_outstanding", "total_debt",

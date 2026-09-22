@@ -37,10 +37,16 @@ from sectors_client.client import SectorsClient, SectorsAPIError, BASE_URL
 
 
 def _slugify(name: Optional[str]) -> Optional[str]:
-    """Kebab-case a sub_sector display name into a Sectors slug."""
+    """Kebab-case a display name into a Sectors slug."""
     if not name:
         return None
     return name.strip().lower().replace(" & ", "-").replace(" ", "-")
+
+
+# Minimum ticker count for the *narrower* industry-level match before widening back
+# to ``sub_sector``. Below this, a "median" is just an average of one or two peers and
+# has no outlier resistance — so widen the taxonomy rather than trust a 2-peer median.
+_MIN_INDUSTRY_PEERS = 3
 
 
 @dataclass
@@ -69,29 +75,59 @@ def _resolve_peers(
     cache: Optional[SQLiteCache] = None,
     limit: int = 5,
 ) -> PeerLookupResult:
-    """Resolve same-sub-sector peers: screener ticker list -> mapped CompanyComps."""
-    subject_base = subject.ticker.split(".")[0]
-    slug = _slugify(subject.sub_sector or subject.sector)
-    if not slug:
-        return PeerLookupResult(subject=subject, reason="no sub_sector/sector to match")
+    """Resolve same-industry peers: screener ticker list -> mapped CompanyComps.
 
-    # Step 1: get the ticker list (screener returns symbol + company_name only).
-    try:
+    Matches on ``industry`` first (narrower than ``sub_sector`` — see the module
+    docs + the confirmed Sectors taxonomy: ``sector`` → ``sub_sector`` → ``industry``
+    → ``sub_industry``, e.g. Basic Materials splits into Chemicals, Containers &
+    Packaging, Metals & Minerals, Forestry & Paper at the ``industry`` level). Falls
+    back to ``sub_sector`` when the industry match returns fewer than
+    ``_MIN_INDUSTRY_PEERS`` tickers.
+    """
+    subject_base = subject.ticker.split(".")[0]
+    industry_slug = _slugify(subject.industry)
+    sub_sector_slug = _slugify(subject.sub_sector or subject.sector)
+
+    def _fetch(where_field: str, slug: str) -> list[str]:
         payload = client.request(
             f"{BASE_URL}/v2/companies/",
-            params={"where": f"sub_sector = '{slug}'", "limit": str(limit + 5)},
+            params={"where": f"{where_field} = '{slug}'", "limit": str(limit + 5)},
         )
-    except SectorsAPIError:
-        return PeerLookupResult(subject=subject, reason="screener peer lookup failed")
+        return [
+            r["symbol"].replace(".JK", "")
+            for r in (payload.get("results") or [])
+            if r.get("symbol") and r["symbol"].replace(".JK", "") != subject_base
+        ][:limit]
 
-    tickers = [
-        r["symbol"].replace(".JK", "")
-        for r in (payload.get("results") or [])
-        if r.get("symbol") and r["symbol"].replace(".JK", "") != subject_base
-    ][:limit]
+    tickers: list[str] = []
+    tried = "industry" if industry_slug else "sub_sector"
+    if industry_slug and industry_slug != sub_sector_slug:
+        try:
+            industry_tickers = _fetch("industry", industry_slug)
+        except SectorsAPIError:
+            return PeerLookupResult(subject=subject, reason="screener peer lookup failed")
+        if len(industry_tickers) >= _MIN_INDUSTRY_PEERS:
+            tickers = industry_tickers
+        elif sub_sector_slug:
+            # Too few industry peers to trust a median — widen to sub_sector.
+            tried = "sub_sector"
+            try:
+                tickers = _fetch("sub_sector", sub_sector_slug)
+            except SectorsAPIError:
+                return PeerLookupResult(subject=subject, reason="screener peer lookup failed")
+        else:
+            tickers = industry_tickers
+    elif sub_sector_slug:
+        tried = "sub_sector"
+        try:
+            tickers = _fetch("sub_sector", sub_sector_slug)
+        except SectorsAPIError:
+            return PeerLookupResult(subject=subject, reason="screener peer lookup failed")
 
     if not tickers:
-        return PeerLookupResult(subject=subject, reason=f"no same-sub_sector peers found for '{slug}'")
+        return PeerLookupResult(
+            subject=subject, reason=f"no same-{tried} peers found ('{industry_slug or sub_sector_slug}')"
+        )
 
     # Step 2: pull + map each peer through the shared report pipeline.
     peers: list[CompanyComp] = []

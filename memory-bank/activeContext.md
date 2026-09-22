@@ -86,6 +86,32 @@ optional true-NAV (narrated, not built).
       `growth.py` lives at repo root, no model imports).
     - Live BBCA check (before → after): P/B leg rose from 2,105 → 10,298 (ROE 20.4% vs
       peers' 2–7%); band tightened from [2,105..13,694] to [2,222..10,328].
+  - **INKP negative-IV + TKIM football-field blowout fix** (this session):
+    - *Negative Sectors intrinsic value*: `CompanyComp.intrinsic_value` no longer has a
+      `ge=0` constraint (Sectors legitimately returns negatives for distressed names,
+      e.g. INKP = -29,670). A negative IV is now accepted at the model layer, excluded
+      from `intrinsic_upside` / implied-balance `sectors_intrinsic` / football-field
+      "Sectors IV" row, and surfaced via a new non-fatal `data_quality_flags` list (warned
+      in the UI) rather than a crash or a hard exclusion — the company stays screenable on
+      its comps multiples.
+    - *Peer matching now industry-first*: `engine.peer_lookup` matches on `industry`
+      (narrower than `sub_sector`, confirmed from the Sectors taxonomy: `sector` →
+      `sub_sector` → `industry` → `sub_industry`), falling back to `sub_sector` only when
+      the industry match yields < `_MIN_INDUSTRY_PEERS` (=3) tickers. Fixed TKIM matching
+      Chemicals/Metals peers instead of its Forestry & Paper peers.
+    - *Football field is outlier-resistant*: `engine/football_field.py` switched from raw
+      min/max to the same growth/ROE/margin normalization as `implied_valuation`, and the
+      bar span is now the **IQR (25th–75th percentile)** of the normalized implied prices
+      (not min/max), so a single nano-cap peer (ALKA's 203x EV/EBITDA) can no longer blow
+      up a range (TKIM EV/EBITDA was 27,717–407,403, now sane). EV→price bridge floors at
+      0 (a leverage-heavy subject whose net debt exceeds implied EV gets 0, not a negative
+      "price").
+    - *UI*: current-price marker recolored from near-black `#1f1e1b` to a high-contrast
+      blue `#2563eb` with a white outline; football-field caption updated to describe the
+      IQR + normalization method.
+  - **Screener API note**: the Companies Screener supports `industry` / `sub_sector` /
+    `sector` / `sub_industry` as direct `where=` filter fields (confirmed v2 docs), not
+    just `sub_sector` — which is what makes industry-level peer matching possible.
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon
