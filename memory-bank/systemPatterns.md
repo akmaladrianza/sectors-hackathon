@@ -22,7 +22,7 @@ Sectors_Hackathon/
 │   ├── mining_valuation.py     # EV/tonne-of-reserves & -resources join
 │   ├── implied_valuation.py    # peer-median -> implied price + Sectors IV comparison
 │   ├── football_field.py       # industry-matched valuation ranges (min-max bars)
-│   ├── peer_lookup.py          # same-sub_sector peer resolution (Companies Screener)
+│   ├── peer_lookup.py          # same-sub_sector peers (screener for tickers → report per peer)
 │   ├── proxy_library.py        # sector-conditional growth proxies (bank/miner/generic)
 │   ├── dcf.py                  # 2-stage DCF (FCFF build-up + FCFE bridge + WC days)
 │   └── xlsx_export.py          # formula-driven DCF sheet for the workbook export

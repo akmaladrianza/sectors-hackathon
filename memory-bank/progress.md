@@ -183,6 +183,25 @@
     export failure surfaces a full traceback in an expander instead of a one-line
     warning.
   - New test suite `tests/test_football.py` (peer inversion + WC days) — green.
+- **2026-09-21 football-field root-cause fix (#3, this session):**
+  - **Symptom**: the football-field chart rendered empty despite peers existing.
+  - **Root cause** (confirmed live, not assumed): the Companies Screener's `results`
+    only ever contain `symbol` + `company_name` — `pe`/`pb`/`enterprise_to_ebitda` etc.
+    are valid query *filters* but are never projected into the response body. The first
+    `engine/football_field.py` read those nonexistent raw keys, so every peer-range row
+    came back empty.
+  - **Fix**: `engine/peer_lookup.py` now resolves peers in two steps — the Companies
+    Screener for the ticker list only (capped to 5 non-subject peers), then a
+    `company_report` (`overview`+`financials`) + `report_to_company_comp` pull per peer
+    (the same tested pipeline the main screener uses), producing real `CompanyComp`
+    computed multiples. Peers that fail to map are recorded in `skipped` (surfaced in
+    the UI, never silently dropped).
+  - **Cost note**: each subject company burns ~2 credits × up to 5 peers ≈ 10 credits
+    for its football field, cached per session (`st.session_state`) + the shared SQLite
+    cache, so slider edits don't re-bill.
+  - **Edge-case hardening**: `_range_from_ev` no longer leaks a `(None, None)` row when
+    the subject lacks `shares_outstanding`; new regression test
+    `test_football.py::test_ev_range_degraded_when_no_shares`. All 10+1 test files green.
 - Product definition: settled — name (provisional), problem statement, dual audience
   (coverage-gap retail via Simple mode, M&A advisors via Advanced mode), UI/output
   structure, mining overlay, two-mode valuation architecture, AI-assistant citation
@@ -201,6 +220,10 @@
   fiscal-year/quarter/as-of-date split is proposed but not implemented (**deferred**).
 - `companies` seed-universe table (from `schema.sql`) never built; the screener uses a
   hardcoded 2-ticker mining map (**deferred**).
+- **Sectors Companies Screener returns only `symbol` + `company_name`** — its queryable
+  multiple fields (`pe`/`pb`/`enterprise_to_ebitda`, bracket-notation yearly fields) are
+  filters/`order_by` keys only, never projected into `results`. Any code needing peer
+  multiples must pull each ticker's `company_report` (see `engine/peer_lookup.py`).
 
 ## Evolution of decisions
 - Chose `Decimal` for monetary fields (precision) over `float`.
