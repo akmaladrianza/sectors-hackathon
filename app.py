@@ -356,32 +356,37 @@ if advanced:
             wc_sugg = assistant.suggest_working_capital(c)
             capex_sugg = assistant.suggest_capex(c)
 
-            g = st.number_input(
-                "Revenue growth rate", min_value=-0.5, max_value=1.0,
-                value=default_g, step=0.01, key=f"g_{c.ticker}", format="%.3f",
+            # Percentage inputs below are presented in human "%" units: each stores
+            # *percentage points* (e.g. 8.0 = 8%) and is divided by 100 when fed into
+            # the engine (run_dcf) and the xlsx export.
+            _g_pp = st.number_input(
+                "Revenue growth rate", min_value=-50.0, max_value=100.0,
+                value=float(default_g) * 100.0, step=1.0, key=f"g_{c.ticker}",
+                format="%.1f%%",
             )
-            m = st.number_input(
-                "FCF margin (of revenue)", min_value=0.0, max_value=1.0,
-                value=0.15, step=0.01, key=f"m_{c.ticker}",
+            _m_pp = st.number_input(
+                "FCF margin (of revenue)", min_value=0.0, max_value=100.0,
+                value=15.0, step=1.0, key=f"m_{c.ticker}", format="%.1f%%",
             )
             # --- FCFF build-up (advanced FCF/FCFE parameters) -----------------
             use_buildup = st.checkbox("Use FCFF build-up (EBITDA → FCF)", value=False,
                                       key=f"bu_{c.ticker}")
-            em = dm = tx = cx = nw = None
+            em_pp = dm_pp = tx_pp = cx_pp = None
+            nw = None
             if use_buildup:
                 if c.revenue and c.ebitda:
                     _default_em = float(c.ebitda / c.revenue)
                 else:
                     _default_em = 0.30
-                em = st.number_input("EBITDA margin", 0.0, 0.9, value=_default_em,
-                                     step=0.01, key=f"em_{c.ticker}")
-                dm = st.number_input("D&A (% of revenue)", 0.0, 0.5, value=0.05,
-                                     step=0.005, key=f"dm_{c.ticker}")
-                tx = st.number_input("Tax rate", 0.0, 0.5, value=0.22,
-                                     step=0.01, key=f"tx_{c.ticker}")
+                em_pp = st.number_input("EBITDA margin", 0.0, 90.0, value=_default_em * 100.0,
+                                        step=1.0, key=f"em_{c.ticker}", format="%.1f%%")
+                dm_pp = st.number_input("D&A (% of revenue)", 0.0, 50.0, value=5.0,
+                                        step=0.5, key=f"dm_{c.ticker}", format="%.1f%%")
+                tx_pp = st.number_input("Tax rate", 0.0, 50.0, value=22.0,
+                                        step=1.0, key=f"tx_{c.ticker}", format="%.1f%%")
                 _capex_default = float(capex_sugg.value) if capex_sugg and capex_sugg.available else 0.15
-                cx = st.number_input("Capex (% of revenue)", 0.0, 1.0, value=_capex_default,
-                                     step=0.01, key=f"cx_{c.ticker}")
+                cx_pp = st.number_input("Capex (% of revenue)", 0.0, 100.0, value=_capex_default * 100.0,
+                                        step=1.0, key=f"cx_{c.ticker}", format="%.1f%%")
                 # Empirically-derived capex benchmarks from the company's own audited data.
                 _anchors = assistant.capex_anchors(c)
                 if _anchors:
@@ -422,15 +427,15 @@ if advanced:
                     Decimal(str(ar_days)),
                     Decimal(str(inv_days)),
                     Decimal(str(ap_days)),
-                    Decimal(str(g)),
+                    Decimal(str(_g_pp / 100.0)),
                 )
-            r = st.number_input(
-                "Expected rate of return (discount)", min_value=0.01, max_value=0.50,
-                value=0.12, step=0.01, key=f"r_{c.ticker}", format="%.3f",
+            _r_pp = st.number_input(
+                "Expected rate of return (discount)", min_value=1.0, max_value=50.0,
+                value=12.0, step=1.0, key=f"r_{c.ticker}", format="%.1f%%",
             )
-            tvg = st.number_input(
-                "Terminal growth", min_value=0.0, max_value=0.10,
-                value=0.02, step=0.005, key=f"tvg_{c.ticker}", format="%.3f",
+            _tvg_pp = st.number_input(
+                "Terminal growth", min_value=0.0, max_value=10.0,
+                value=2.0, step=0.5, key=f"tvg_{c.ticker}", format="%.1f%%",
             )
 
             net_debt = None
@@ -439,14 +444,14 @@ if advanced:
 
             dcf = run_dcf(
                 revenue=c.revenue,
-                growth_rate=Decimal(str(g)),
-                cash_flow_margin=Decimal(str(m)),
-                discount_rate=Decimal(str(r)),
-                terminal_growth=Decimal(str(tvg)),
-                ebitda_margin=Decimal(str(em)) if em is not None else None,
-                depreciation_margin=Decimal(str(dm)) if dm is not None else None,
-                tax_rate=Decimal(str(tx)) if tx is not None else None,
-                capex_margin=Decimal(str(cx)) if cx is not None else None,
+                growth_rate=Decimal(str(_g_pp / 100.0)),
+                cash_flow_margin=Decimal(str(_m_pp / 100.0)),
+                discount_rate=Decimal(str(_r_pp / 100.0)),
+                terminal_growth=Decimal(str(_tvg_pp / 100.0)),
+                ebitda_margin=Decimal(str(em_pp / 100.0)) if em_pp is not None else None,
+                depreciation_margin=Decimal(str(dm_pp / 100.0)) if dm_pp is not None else None,
+                tax_rate=Decimal(str(tx_pp / 100.0)) if tx_pp is not None else None,
+                capex_margin=Decimal(str(cx_pp / 100.0)) if cx_pp is not None else None,
                 nwc_change_margin=nw if nw is not None else None,
                 shares_outstanding=c.shares_outstanding,
                 net_debt=net_debt,
@@ -592,10 +597,12 @@ try:
                 writer, sheet_name="Excluded", index=False
             )
         for c in result.screenable + [m.comp for m in result.miners]:
-            g_val = Decimal(str(st.session_state.get(f"g_{c.ticker}", 0.10)))
-            m_val = Decimal(str(st.session_state.get(f"m_{c.ticker}", 0.15)))
-            r_val = Decimal(str(st.session_state.get(f"r_{c.ticker}", 0.12)))
-            tvg_val = Decimal(str(st.session_state.get(f"tvg_{c.ticker}", 0.02)))
+            # Session state now stores percentage points (e.g. 8.0 = 8%); convert to
+            # fractions here. Defaults also expressed in percentage points.
+            g_val = Decimal(str(st.session_state.get(f"g_{c.ticker}", 10.0))) / 100
+            m_val = Decimal(str(st.session_state.get(f"m_{c.ticker}", 15.0))) / 100
+            r_val = Decimal(str(st.session_state.get(f"r_{c.ticker}", 12.0))) / 100
+            tvg_val = Decimal(str(st.session_state.get(f"tvg_{c.ticker}", 2.0))) / 100
             net_debt_val = None
             if c.total_debt is not None and c.cash_and_equivalents is not None:
                 net_debt_val = c.total_debt - c.cash_and_equivalents
@@ -603,15 +610,17 @@ try:
             _ebitda = c.ebitda
             _dep = c.depreciation_amortization
             _capex = c.capital_expenditure
-            _tax_rate = Decimal(str(st.session_state.get(f"tx_{c.ticker}", 0.22)))
+            _tax_rate = Decimal(str(st.session_state.get(f"tx_{c.ticker}", 22.0))) / 100
             if _dep is None and _ebitda is not None and c.ebit is not None:
                 _dep = _ebitda - c.ebit if _ebitda - c.ebit > 0 else None
             # NWC change margin from the stored FCFF build-up session values.
             _nw = None
+            _ar_d = _inv_d = _ap_d = None
             if st.session_state.get(f"bu_{c.ticker}", False):
                 _ar = Decimal(str(st.session_state.get(f"ar_{c.ticker}", 30.0)))
                 _inv = Decimal(str(st.session_state.get(f"inv_{c.ticker}", 30.0)))
                 _ap = Decimal(str(st.session_state.get(f"ap_{c.ticker}", 30.0)))
+                _ar_d, _inv_d, _ap_d = float(_ar), float(_inv), float(_ap)
                 _nw = nwc_change_margin_from_days(_ar, _inv, _ap, g_val)
 
             write_dcf_sheet(
@@ -632,6 +641,9 @@ try:
                 tax_rate=_tax_rate,
                 capex=_capex,
                 nwc_change=_nw,
+                ar_days=_ar_d,
+                inv_days=_inv_d,
+                ap_days=_ap_d,
             )
 except Exception as exc:  # noqa: BLE001
     _export_error = exc

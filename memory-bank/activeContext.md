@@ -144,6 +144,22 @@ optional true-NAV (narrated, not built).
     - The `data_quality_flags` warning banner in `app.py` now also covers `result.miners`
       (previously only `screenable` non-miners).
     - Removed the unused `net_working_capital` parameter from `write_dcf_sheet`.
+  - **Mining universe + percentage UI + xlsx transparency** (this session):
+    - **Dynamic mining map**: `screener.screener` now resolves listed-IDX-miner → mining
+      slug from `GET /v2/mining/companies/?has_financials=true` (one cached page, ~9
+      listed miners: AADI/ADMR/ADRO/BYAN/BUMI/DSSA/GEMS/INDY/ITMG), merged with a seed map
+      (MDKA/PTBA/ADRO). Fixes PTBA/BYAN/AADI/ADMR previously missing the mining overlay
+      (the old hardcoded map only had MDKA+ADRO). `has_financials=true` avoids paging 366
+      total entries, most of which are unlisted (`symbol=null`).
+    - **Percentage display**: Advanced-mode rate/margin inputs (growth, FCF margin, EBITDA
+      margin, D&A%, tax rate, capex%, discount rate, terminal growth) now use percentage-
+      point scale (`value=8.0`, `format="%.1f%%"`) and are divided by 100 at the `run_dcf`
+      call and xlsx export; session-state defaults likewise converted.
+    - **xlsx transparency / no hidden numbers**: `write_dcf_sheet` now emits AR/Inventory/
+      AP days, Net debt, and Shares outstanding as their own labelled, editable assumption
+      rows; the FCFE bridge references those cells (`=L26-$B$14`, `=L27/$B$15`) instead of
+      burying the literals inside formula strings. Projection start row is now derived from
+      the assumption-table length.
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon

@@ -43,6 +43,9 @@ def write_dcf_sheet(
     tax_rate: Optional[Decimal] = None,
     capex: Optional[Decimal] = None,
     nwc_change: Optional[Decimal] = None,
+    ar_days: Optional[float] = None,
+    inv_days: Optional[float] = None,
+    ap_days: Optional[float] = None,
 ) -> None:
     """Write a formula-driven 3-statement-style FCFF build-up DCF onto a workbook.
 
@@ -77,9 +80,14 @@ def write_dcf_sheet(
         ("D&A (of revenue)", _d(depreciation / revenue) if depreciation is not None and revenue else None),
         ("Tax rate", _d(tax_rate)),
         ("Capex (of revenue)", _d(capex / revenue) if capex is not None and revenue else None),
+        ("AR days", ar_days),
+        ("Inventory days", inv_days),
+        ("AP days", ap_days),
         ("ΔNWC (of revenue)", _d(nwc_change / revenue) if nwc_change is not None and revenue else None),
         ("Discount rate (r)", _d(r)),
         ("Terminal growth", _d(tvg)),
+        ("Net debt", _d(net_debt)),
+        ("Shares outstanding", _d(shares_outstanding)),
         ("Years", years),
     ]
     for i, (label, val) in enumerate(names, start=2):
@@ -99,7 +107,8 @@ def write_dcf_sheet(
     year0_rev = _d(revenue) or 0
 
     # --- Projection block (income statement → FCFF) -------------------------
-    start = 13
+    # Start below the assumption table + one blank spacer row.
+    start = max(rows.values()) + 2
     header = ["Year", "Revenue", "EBITDA", "D&A", "EBIT", "Tax",
               "NOPAT", "Capex", "ΔNWC", "FCFF", "Disc factor", "PV FCFF"]
     for col, h in enumerate(header, start=1):
@@ -142,14 +151,18 @@ def write_dcf_sheet(
     )
 
     # --- FCFE bridge --------------------------------------------------------
-    if net_debt is not None:
+    # Reference the named assumption cells so net debt / shares are visible + editable
+    # rather than buried as literals inside the formula strings.
+    nd_cell = f"$B${rows['Net debt']}" if net_debt is not None else None
+    sh_cell = f"$B${rows['Shares outstanding']}" if (shares_outstanding and shares_outstanding > 0) else None
+    if nd_cell is not None:
         eq_row = sum_row + 1
         ws.cell(row=eq_row, column=1, value="Intrinsic equity (EV - net debt)")
-        ws.cell(row=eq_row, column=12, value=f"={fcff_col}{sum_row}-{_d(net_debt)}")
-        if shares_outstanding and shares_outstanding > 0:
+        ws.cell(row=eq_row, column=12, value=f"={fcff_col}{sum_row}-{nd_cell}")
+        if sh_cell is not None:
             px_row = eq_row + 1
             ws.cell(row=px_row, column=1, value="Intrinsic price per share")
-            ws.cell(row=px_row, column=12, value=f"={fcff_col}{eq_row}/{_d(shares_outstanding)}")
+            ws.cell(row=px_row, column=12, value=f"={fcff_col}{eq_row}/{sh_cell}")
 
 
 def _col(col_index: int, row: int) -> str:

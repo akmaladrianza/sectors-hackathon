@@ -50,6 +50,11 @@ class FakeClient:
             "financials": {"eps": 3.8, "historical_financials": []},
         }
 
+    def get_mining_companies(self, has_financials: bool | None = None) -> dict:
+        # Return an empty list so the dynamic slug map falls back to the seed map
+        # (MINING_SLUGS). Tests that need the live map pass explicit ``mining_slugs``.
+        return {"results": [], "pagination": {"has_next": False}}
+
     def get_mining_performance(self, slug: str) -> dict:
         # MDKA and ADRO have mining-performance fixtures under fixtures/mining/.
         for ticker, sl in {"MDKA": "pt-merdeka-copper-gold-tbk",

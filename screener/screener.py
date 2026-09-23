@@ -61,14 +61,50 @@ class ScreenerResult:
     excluded: list[Exclusion] = field(default_factory=list)
 
 
-# Known mining tickers → their mining-extension slug. This is the small hand-built
-# map the architecture calls for (`companies.mining_slug`); it would eventually be
-# sourced from `get_mining_companies` + a persistent `companies` table, but for the
-# seed universe a literal map is simpler and deterministic.
+# Fallback mining tickers → their mining-extension slug, merged with the live lookup.
+# These are the listed IDX miners that are *not* surfaced by the ``has_financials=true``
+# mining list (MDKA is a holding, PTBA is a coal SOE that Sectors flags differently) but
+# still deserve reserve metrics. The dynamic lookup covers the rest (AADI/ADMR/ADRO/BYAN/
+# BUMI/DSSA/GEMS/INDY/ITMG...).
 MINING_SLUGS: dict[str, str] = {
     "MDKA": "pt-merdeka-copper-gold-tbk",
     "ADRO": "pt-alamtri-resources-indonesia-tbk",
+    "PTBA": "pt-bukit-asam-tbk",
 }
+
+
+def _build_mining_slug_map(
+    client: SectorsClient, cache: Optional[SQLiteCache] = None
+) -> dict[str, str]:
+    """Resolve listed IDX ticker -> mining-extension slug from the live companies list.
+
+    Pulls ``GET /v2/mining/companies/?has_financials=true`` (cached against the shared
+    cache, keyed on a stable endpoint string) — this returns exactly the listed IDX
+    miners with financials (a single page, ~9 entries), each carrying a non-null
+    ``symbol``, so no pagination is needed. The result is *merged with* the built-in
+    ``MINING_SLUGS`` seed map (covering MDKA/PTBA/ADRO that the filtered list omits).
+    On any mining-API failure the seed map alone is returned, so a transient outage
+    never changes comps behaviour.
+    """
+    endpoint = "mining_companies_list"
+    payload = None
+    try:
+        if cache is not None:
+            payload = cache.get("mining", "universe", endpoint)
+        if payload is None:
+            payload = client.get_mining_companies(has_financials=True)
+            if cache is not None:
+                cache.set("mining", "universe", endpoint, payload)
+    except SectorsAPIError:
+        return dict(MINING_SLUGS)
+
+    slug_map: dict[str, str] = dict(MINING_SLUGS)
+    for entry in payload.get("results") or []:
+        sym = (entry.get("symbol") or "").split(".")[0].upper()
+        slug = entry.get("slug")
+        if sym and slug:
+            slug_map[sym] = slug
+    return slug_map
 
 
 def screen_tickers(
@@ -80,14 +116,18 @@ def screen_tickers(
     """Screen a batch of tickers into screenable + excluded partitions.
 
     ``mining_slugs`` maps IDX ticker (no suffix) to a mining-extension slug so the
-    screener can also join reserve metrics; defaults to the built-in seed map.
+    screener can also join reserve metrics. When omitted, the map is resolved
+    dynamically from ``GET /v2/mining/companies/`` (cached), falling back to the
+    built-in seed map — so every listed IDX miner gets reserve metrics, not just the
+    two hardcoded seed tickers.
 
     ``cache`` (optional): an SQLiteCache keyed on ``(symbol, today, endpoint)``; if
     provided, company-report payloads are read/written there so repeated screener
     runs on the same universe don't re-burn API credits.
     """
     client = client or SectorsClient()
-    mining_slugs = mining_slugs if mining_slugs is not None else MINING_SLUGS
+    if mining_slugs is None:
+        mining_slugs = _build_mining_slug_map(client, cache)
     today = date.today().isoformat()
 
     result = ScreenerResult()
