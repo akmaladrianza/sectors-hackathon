@@ -239,6 +239,28 @@ if result is None:
         )
     st.stop()
 
+# --- KPI summary strip (at-a-glance headline per subject) --------------------
+_kpi_comp = list(result.screenable) + [m.comp for m in result.miners]
+if _kpi_comp:
+    st.subheader("Summary")
+    _kpi_cols = st.columns(min(len(_kpi_comp), 5))
+    for _slot, c in zip(_kpi_cols, _kpi_comp):
+        with _slot:
+            _px = float(c.price) if c.price is not None else None
+            _ups = float(c.intrinsic_upside * 100.0) if c.intrinsic_upside is not None else None
+            _iv = float(c.intrinsic_value) if (c.intrinsic_value is not None and c.intrinsic_value > 0) else None
+            st.metric(
+                label=c.ticker,
+                value=f"{_px:,.0f}" if _px is not None else "—",
+                delta=f"{_ups:+.1f}%" if _ups is not None else None,
+                help=(
+                    f"Last close vs Sectors' intrinsic value {_iv:,.0f}"
+                    if _iv is not None
+                    else "Sectors intrinsic value unavailable or negative (distress flag)"
+                ),
+                border=True,
+            )
+
 # --- Comps table -----------------------------------------------------------
 st.subheader("Comparable companies")
 comps_df = view.to_dataframe(result)
@@ -274,10 +296,23 @@ if len(result.screenable) + len(result.miners) < 2:
         "available, is still shown in the comps table above."
     )
 elif not implied_df.empty:
-    st.dataframe(
-        implied_df, use_container_width=True, hide_index=True,
-        column_config=_comps_column_config(),
+    def _verdict_style(v):
+        if v == "Overvalued":
+            return "color: #c0392b; font-weight: 600;"
+        if v == "Undervalued":
+            return "color: #1e8449; font-weight: 600;"
+        return "color: #8a8578;"
+
+    # Stylers replace column_config, so apply number formatting here too (or the
+    # comma separators would be lost on this table).
+    _styled = implied_df.style
+    _styled = _styled.format(
+        {"Current price": "{:,.0f}", "Implied low": "{:,.0f}",
+         "Implied high": "{:,.0f}", "Sectors IV": "{:,.0f}"},
+        na_rep="—",
     )
+    _styled = _styled.map(_verdict_style, subset=["Verdict"])
+    st.dataframe(_styled, use_container_width=True, hide_index=True)
     st.caption(
         "Implied prices are peer-median-multiple inversions (excluding the subject) "
         "combined with Sectors' own intrinsic value. Verdict is informational only — "

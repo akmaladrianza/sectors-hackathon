@@ -166,7 +166,16 @@ optional true-NAV (narrated, not built).
       rows; the FCFE bridge references those cells (`=L26-$B$14`, `=L27/$B$15`) instead of
       burying the literals inside formula strings. Projection start row is now derived from
       the assumption-table length.
-     - **ΔNWC units bug fixed**: `write_dcf_sheet` had a double-division regression — it
+  - **UI: KPI summary strip + verdict color** (this session):
+    - Added a `st.metric`-card summary strip after the header — one bordered card per
+      subject (screenable + miners) showing last close with the Sectors-IV upside % as a
+      colored delta (green/red), with a tooltip conveying the underlying IV or a "distress"
+      note when IV is negative/missing. Kept to ≤5 cards via `st.columns(min(n, 5))`.
+    - The implied-valuation table's **Verdict** column is now color-coded (Overvalued red,
+      Undervalued green, Fairly valued muted), via a `pandas.Styler`. Because a Styler
+      *replaces* `column_config`, the number formatting (comma separators) for that table
+      was moved into the Styler's `.format(...)` so it isn't lost.
+  - **ΔNWC units bug fixed**: `write_dcf_sheet` had a double-division regression — it
        treated `nwc_change` as a dollar amount and divided the *already-a-margin* value
        (from `nwc_change_margin_from_days`) by revenue again, writing a ~1e-18 garbage
        cell. Renamed the param to `nwc_change_margin` and stopped re-dividing; added
