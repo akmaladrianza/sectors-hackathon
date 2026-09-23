@@ -153,8 +153,14 @@ optional true-NAV (narrated, not built).
       total entries, most of which are unlisted (`symbol=null`).
     - **Percentage display**: Advanced-mode rate/margin inputs (growth, FCF margin, EBITDA
       margin, D&A%, tax rate, capex%, discount rate, terminal growth) now use percentage-
-      point scale (`value=8.0`, `format="%.1f%%"`) and are divided by 100 at the `run_dcf`
+      point scale (`value=8.0` meaning 8%) and are divided by 100 at the `run_dcf`
       call and xlsx export; session-state defaults likewise converted.
+      **Constraint learned**: `st.number_input`'s `format` param cannot carry a literal
+      `%` — Streamlit sanity-checks it via `float(format % 2)`, so `"%.1f%%"` (which
+      formats to `"2.0%"`) raises `StreamlitInvalidNumberFormatError` and crashes the app.
+      Fix: keep `format="%.1f"` and put `%` in the widget **label** (`"... (%)"`). Note
+      `st.column_config.NumberColumn` *does* accept `%` (`"%.2f%%"` / `"percent"`), so the
+      two are not interchangeable.
     - **xlsx transparency / no hidden numbers**: `write_dcf_sheet` now emits AR/Inventory/
       AP days, Net debt, and Shares outstanding as their own labelled, editable assumption
       rows; the FCFE bridge references those cells (`=L26-$B$14`, `=L27/$B$15`) instead of

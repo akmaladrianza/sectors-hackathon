@@ -357,15 +357,18 @@ if advanced:
 
             # Percentage inputs below are presented in human "%" units: each stores
             # *percentage points* (e.g. 8.0 = 8%) and is divided by 100 when fed into
-            # the engine (run_dcf) and the xlsx export.
+            # the engine (run_dcf) and the xlsx export. Note: st.number_input's `format`
+            # cannot carry a literal "%" suffix — it sanity-checks with float(format % 2),
+            # and "%.1f%%" formats to "2.0%" which float() can't parse
+            # (StreamlitInvalidNumberFormatError). So "%" lives in the label instead.
             _g_pp = st.number_input(
-                "Revenue growth rate", min_value=-50.0, max_value=100.0,
+                "Revenue growth rate (%)", min_value=-50.0, max_value=100.0,
                 value=float(default_g) * 100.0, step=1.0, key=f"g_{c.ticker}",
-                format="%.1f%%",
+                format="%.1f",
             )
             _m_pp = st.number_input(
-                "FCF margin (of revenue)", min_value=0.0, max_value=100.0,
-                value=15.0, step=1.0, key=f"m_{c.ticker}", format="%.1f%%",
+                "FCF margin (% of revenue)", min_value=0.0, max_value=100.0,
+                value=15.0, step=1.0, key=f"m_{c.ticker}", format="%.1f",
             )
             # --- FCFF build-up (advanced FCF/FCFE parameters) -----------------
             use_buildup = st.checkbox("Use FCFF build-up (EBITDA → FCF)", value=False,
@@ -377,15 +380,15 @@ if advanced:
                     _default_em = float(c.ebitda / c.revenue)
                 else:
                     _default_em = 0.30
-                em_pp = st.number_input("EBITDA margin", 0.0, 90.0, value=_default_em * 100.0,
-                                        step=1.0, key=f"em_{c.ticker}", format="%.1f%%")
+                em_pp = st.number_input("EBITDA margin (%)", 0.0, 90.0, value=_default_em * 100.0,
+                                        step=1.0, key=f"em_{c.ticker}", format="%.1f")
                 dm_pp = st.number_input("D&A (% of revenue)", 0.0, 50.0, value=5.0,
-                                        step=0.5, key=f"dm_{c.ticker}", format="%.1f%%")
-                tx_pp = st.number_input("Tax rate", 0.0, 50.0, value=22.0,
-                                        step=1.0, key=f"tx_{c.ticker}", format="%.1f%%")
+                                        step=0.5, key=f"dm_{c.ticker}", format="%.1f")
+                tx_pp = st.number_input("Tax rate (%)", 0.0, 50.0, value=22.0,
+                                        step=1.0, key=f"tx_{c.ticker}", format="%.1f")
                 _capex_default = float(capex_sugg.value) if capex_sugg and capex_sugg.available else 0.15
                 cx_pp = st.number_input("Capex (% of revenue)", 0.0, 100.0, value=_capex_default * 100.0,
-                                        step=1.0, key=f"cx_{c.ticker}", format="%.1f%%")
+                                        step=1.0, key=f"cx_{c.ticker}", format="%.1f")
                 # Empirically-derived capex benchmarks from the company's own audited data.
                 _anchors = assistant.capex_anchors(c)
                 if _anchors:
@@ -429,12 +432,12 @@ if advanced:
                     Decimal(str(_g_pp / 100.0)),
                 )
             _r_pp = st.number_input(
-                "Expected rate of return (discount)", min_value=1.0, max_value=50.0,
-                value=12.0, step=1.0, key=f"r_{c.ticker}", format="%.1f%%",
+                "Expected rate of return (% discount)", min_value=1.0, max_value=50.0,
+                value=12.0, step=1.0, key=f"r_{c.ticker}", format="%.1f",
             )
             _tvg_pp = st.number_input(
-                "Terminal growth", min_value=0.0, max_value=10.0,
-                value=2.0, step=0.5, key=f"tvg_{c.ticker}", format="%.1f%%",
+                "Terminal growth (%)", min_value=0.0, max_value=10.0,
+                value=2.0, step=0.5, key=f"tvg_{c.ticker}", format="%.1f",
             )
 
             net_debt = None
