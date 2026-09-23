@@ -132,6 +132,13 @@ class ReportMapper:
                 revenue_growth_yoy=revenue_cagr(
                     financials.get("historical_financials")
                 ),
+                capital_expenditure=_dec(row.get("capital_expenditure")) if row else None,
+                depreciation_amortization=_dec(row.get("depreciation")) if row else None,
+                fixed_assets=_dec(row.get("fixed_assets")) if row else None,
+                operating_cash_flow=_dec(row.get("operating_cash_flow")) if row else None,
+                free_cash_flow=_dec(row.get("free_cash_flow")) if row else None,
+                tax_expense=_dec(row.get("tax")) if row else None,
+                retained_earnings=_dec(row.get("retained_earnings")) if row else None,
                 eps=_dec(financials.get("eps")),
                 intrinsic_value=_dec(valuation.get("intrinsic_value")),
                 forward_pe=self._to_float(valuation.get("forward_pe")),

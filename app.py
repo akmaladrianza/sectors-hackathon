@@ -324,10 +324,17 @@ if advanced:
             )
             if proxy.source:
                 st.caption(f"Growth heuristic: {proxy.source}")
-            if c.intrinsic_value is not None:
+            if c.intrinsic_value is not None and c.intrinsic_value > 0:
                 st.caption(
                     f"Sectors fair value: {float(c.intrinsic_value):,.0f} vs last close "
                     f"{float(c.price or 0):,.0f}"
+                )
+            elif c.intrinsic_value is not None and c.intrinsic_value < 0:
+                st.caption(
+                    "Sectors intrinsic value is **negative** — the company's standalone "
+                    "DCF value is <= 0, typically from a heavy debt load relative to its "
+                    "earnings power. Relative (comps) valuation is still shown; treat this "
+                    "name with a distress caveat."
                 )
 
             # Optional Sectors-native news (verbatim quote, never interpreted).
@@ -374,6 +381,12 @@ if advanced:
                 _capex_default = float(capex_sugg.value) if capex_sugg and capex_sugg.available else 0.15
                 cx = st.number_input("Capex (% of revenue)", 0.0, 1.0, value=_capex_default,
                                      step=0.01, key=f"cx_{c.ticker}")
+                # Empirically-derived capex benchmarks from the company's own audited data.
+                _anchors = assistant.capex_anchors(c)
+                if _anchors:
+                    with st.expander("Capex benchmarks (own audited data)", expanded=False):
+                        for a in _anchors:
+                            st.caption(f"• **{a.value}** — {a.source}")
                 # Working-capital breakdown into AR / Inventory / AP days, seeded from
                 # the balance sheet where derivable (residual current assets/liabilities).
                 _est_ar, _est_inv, _est_ap = estimate_working_capital_days(
@@ -585,6 +598,21 @@ try:
             net_debt_val = None
             if c.total_debt is not None and c.cash_and_equivalents is not None:
                 net_debt_val = c.total_debt - c.cash_and_equivalents
+            # Derive FY0 FCFF-bridge seeds from the company's own audited data.
+            _ebitda = c.ebitda
+            _dep = c.depreciation_amortization
+            _capex = c.capital_expenditure
+            _tax_rate = Decimal(str(st.session_state.get(f"tx_{c.ticker}", 0.22)))
+            if _dep is None and _ebitda is not None and c.ebit is not None:
+                _dep = _ebitda - c.ebit if _ebitda - c.ebit > 0 else None
+            # NWC change margin from the stored FCFF build-up session values.
+            _nw = None
+            if st.session_state.get(f"bu_{c.ticker}", False):
+                _ar = Decimal(str(st.session_state.get(f"ar_{c.ticker}", 30.0)))
+                _inv = Decimal(str(st.session_state.get(f"inv_{c.ticker}", 30.0)))
+                _ap = Decimal(str(st.session_state.get(f"ap_{c.ticker}", 30.0)))
+                _nw = nwc_change_margin_from_days(_ar, _inv, _ap, g_val)
+
             write_dcf_sheet(
                 writer,
                 sheet_name=f"DCF {c.ticker}",
@@ -598,6 +626,11 @@ try:
                 net_debt=net_debt_val,
                 fiscal_period=c.fiscal_period,
                 as_of_date=c.as_of_date.isoformat() if c.as_of_date else None,
+                ebitda=_ebitda,
+                depreciation=_dep,
+                tax_rate=_tax_rate,
+                capex=_capex,
+                nwc_change=_nw,
             )
 except Exception as exc:  # noqa: BLE001
     _export_error = exc

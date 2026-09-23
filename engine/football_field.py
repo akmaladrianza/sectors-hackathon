@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from statistics import median
 from typing import Optional
 
 from models.company_comp import CompanyComp
@@ -68,18 +67,25 @@ def _normalized_prices(
     normalizers: list[Optional[float]],
     subject_normalizer: Optional[float],
 ) -> list[float]:
-    """Return peer-normalized values re-applied at the subject's driver.
+    """Return the *spread* of peer-normalized values re-applied at the subject's driver.
 
-    Falls back to the raw multiples (no normalization) when the subject's driver is
-    missing/non-positive — mirroring ``implied_valuation``, never a hard failure.
+    Each peer's ``multiple / normalizer`` is a "quality-adjusted per-unit multiple"; we
+    scale each by the *subject's* own driver to get one implied value per peer (a real
+    distribution, not a single median). The caller then takes the IQR of this spread so
+    the football-field bar has an honest intra-peer range without a single outlier
+    defining the edge. Falls back to the raw multiples when the subject's driver is
+    missing/non-positive (never a hard failure).
     """
     if subject_normalizer is None or subject_normalizer <= 0:
         return multiples
-    ratios = [m / n for m, n in zip(multiples, normalizers) if n is not None and n > 0]
-    if not ratios:
+    scaled = [
+        (m / n) * subject_normalizer
+        for m, n in zip(multiples, normalizers)
+        if n is not None and n > 0
+    ]
+    if not scaled:
         return multiples
-    k = median(ratios)
-    return [k * subject_normalizer]
+    return scaled
 
 
 def peer_price_ranges(peers: list[CompanyComp], subject: CompanyComp) -> list[FootballFieldRow]:

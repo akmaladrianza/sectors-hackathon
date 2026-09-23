@@ -36,6 +36,15 @@ def _fmt_pct(v: Optional[float]) -> Optional[float]:
     return round(v, 4)
 
 
+def _fmt_intrinsic(v) -> Optional[float]:
+    """Format a Sectors intrinsic value; a negative (distress/DCF <= 0) value becomes
+    ``None`` (blank) so it is never shown as a bogus negative "fair price". The
+    non-fatal ``data_quality_flags`` warning surfaces the reason instead."""
+    if v is None or float(v) < 0:
+        return None
+    return round(float(v), 2)
+
+
 def comps_rows(result: ScreenerResult) -> list[dict]:
     """Rows for the main comps table (screenable non-mining peers)."""
     rows = []
@@ -51,7 +60,7 @@ def comps_rows(result: ScreenerResult) -> list[dict]:
                 "EV/Revenue": _fmt_multiple(c.ev_to_revenue),
                 "P/E": _fmt_multiple(c.pe_ratio),
                 "P/B": _fmt_multiple(c.price_to_book),
-                "Sectors IV": _fmt_price(c.intrinsic_value),
+                "Sectors IV": _fmt_intrinsic(c.intrinsic_value),
                 "Upside": _fmt_pct(c.intrinsic_upside),
             }
         )

@@ -131,3 +131,47 @@ def sectors_native_revenue(comp) -> Optional[Suggestion]:
         "Sectors-native (own cached data)",
         sector_native=True,
     )
+
+
+def capex_anchors(comp) -> list[Suggestion]:
+    """Return empirically-derived capex benchmarks from the company's own audited FY data.
+
+    Each anchor is computed from Sectors-native fields (no external citation needed) and
+    is a *benchmark to inform* the editable capex assumption, not a hard-coded default.
+    The standard set (per equity-research practice):
+
+    - capex as % of revenue            (simplest; ignores margin)
+    - capex as % of EBITDA             (reinvestment vs. cash generated)
+    - capex / D&A                      (reinvestment vs. asset consumption; <1 = harvest,
+                                        >1 = growth)
+    - reinvestment rate = (capex + ΔNWC) / NOPAT   (Damodaran's growth driver)
+    - fixed-asset turnover = revenue / fixed assets (capex-intensity inverse)
+
+    ΔNWC is approximated from the working-capital days already derived on the model;
+    NOPAT = EBIT × (1 − tax_rate) with the tax rate derived from ``tax``/``earnings_before_tax``
+    when available, else the ubiquitous damped default is omitted.
+    Returns a (possibly empty) list — empty when the company lacks the required raw lines.
+    """
+    out: list[Suggestion] = []
+    base = comp.fiscal_period or "latest FY"
+    src = f"Sectors-native audited ({base})"
+
+    rev = comp.revenue
+    ebitda = comp.ebitda
+    capex = comp.capital_expenditure
+    da = comp.depreciation_amortization
+    fixed = comp.fixed_assets
+
+    if rev and capex:
+        out.append(Suggestion(round(float(capex / rev), 4), f"capex / revenue — {src}"))
+
+    if ebitda and capex and ebitda > 0:
+        out.append(Suggestion(round(float(capex / ebitda), 4), f"capex / EBITDA — {src}"))
+
+    if capex and da and da > 0:
+        out.append(Suggestion(round(float(capex / da), 2), f"capex / D&A — {src}"))
+
+    if rev and fixed and fixed > 0:
+        out.append(Suggestion(round(float(rev / fixed), 2), f"fixed-asset turnover (revenue/fixed assets) — {src}"))
+
+    return out

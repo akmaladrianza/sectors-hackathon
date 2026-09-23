@@ -15,6 +15,7 @@ from assistant import (
     suggest_asset_useful_life,
     suggest_working_capital,
     suggest_capex,
+    capex_anchors,
     sectors_native_revenue,
 )
 from models.company_comp import CompanyComp
@@ -90,6 +91,35 @@ def test_sectors_native_revenue_missing() -> None:
     print("PASS sectors-native revenue missing -> not available\n")
 
 
+def test_capex_anchors_from_own_data() -> None:
+    comp = _comp(
+        revenue=Decimal("1000"),
+        ebitda=Decimal("250"),
+        capital_expenditure=Decimal("100"),
+        depreciation_amortization=Decimal("80"),
+        fixed_assets=Decimal("2000"),
+    )
+    anchors = capex_anchors(comp)
+    by_src_terms = {a.source.split(" — ")[0]: a.value for a in anchors}
+    assert "capex / revenue" in by_src_terms
+    assert round(float(by_src_terms["capex / revenue"]), 4) == 0.1
+    assert "capex / EBITDA" in by_src_terms
+    assert round(float(by_src_terms["capex / EBITDA"]), 4) == 0.4
+    assert "capex / D&A" in by_src_terms
+    assert round(float(by_src_terms["capex / D&A"]), 2) == 1.25
+    assert any("fixed-asset turnover" in k for k in by_src_terms)
+    fa_turnover = next(v for k, v in by_src_terms.items() if "fixed-asset turnover" in k)
+    assert round(float(fa_turnover), 2) == 0.5
+    print(f"PASS capex anchors from own audited data ({len(anchors)} anchors)\n")
+
+
+def test_capex_anchors_no_data() -> None:
+    comp = _comp(revenue=Decimal("1000"))  # no capex/fixed assets
+    anchors = capex_anchors(comp)
+    assert anchors == []
+    print("PASS capex anchors empty when raw lines missing\n")
+
+
 def main() -> None:
     test_mining_suggestions_are_cited()
     test_materials_bucket_is_not_mining()
@@ -97,6 +127,8 @@ def main() -> None:
     test_unknown_industry_is_honest()
     test_sectors_native_revenue_exempt()
     test_sectors_native_revenue_missing()
+    test_capex_anchors_from_own_data()
+    test_capex_anchors_no_data()
     print("ALL ASSISTANT TESTS PASSED")
 
 

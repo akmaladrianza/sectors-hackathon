@@ -102,6 +102,19 @@ class CompanyComp(BaseModel):
     net_income: Optional[Decimal] = Field(None, description="TTM net income")
     eps: Optional[Decimal] = Field(None, description="TTM earnings per share")
 
+    # --- Cash-flow / reinvestment (raw, latest FY) --------------------------
+    # Exposed so the DCF builder can ground capex on the company's *own* audited
+    # reinvestment behaviour (capex/EBITDA, capex/D&A, reinvestment rate, fixed-asset
+    # turnover) instead of a flat %-of-revenue assumption. Sectors supplies these in
+    # ``historical_financials`` for most non-bank large caps.
+    capital_expenditure: Optional[Decimal] = Field(None, ge=0, description="Capital expenditure (latest FY)")
+    depreciation_amortization: Optional[Decimal] = Field(None, ge=0, description="Depreciation & amortization (latest FY)")
+    fixed_assets: Optional[Decimal] = Field(None, ge=0, description="Net fixed assets (latest FY)")
+    operating_cash_flow: Optional[Decimal] = Field(None, description="Operating cash flow (latest FY)")
+    free_cash_flow: Optional[Decimal] = Field(None, description="Free cash flow (latest FY)")
+    tax_expense: Optional[Decimal] = Field(None, description="Tax expense (latest FY)")
+    retained_earnings: Optional[Decimal] = Field(None, description="Retained earnings (latest FY)")
+
     # --- Growth (raw, YoY) ------------------------------------------------
     revenue_growth_yoy: Optional[float] = Field(None, description="e.g. 0.15 for +15%")
     ebitda_growth_yoy: Optional[float] = Field(None, description="e.g. 0.15 for +15%")

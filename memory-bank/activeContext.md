@@ -112,6 +112,28 @@ optional true-NAV (narrated, not built).
   - **Screener API note**: the Companies Screener supports `industry` / `sub_sector` /
     `sector` / `sub_industry` as direct `where=` filter fields (confirmed v2 docs), not
     just `sub_sector` — which is what makes industry-level peer matching possible.
+  - **Football-field zero-width fix + capex anchors + FCFF xlsx 3-statement model** (this session):
+    - *Zero-width bar bug*: the prior normalization collapsed each method to a single
+      median value, so `_iqr_range` returned `(v, v)` and every football-field bar was
+      zero-width (chart looked empty). `engine/football_field._normalized_prices` now
+      returns the **per-peer spread** (each `multiple/driver × subject_driver`) so the
+      IQR yields a real band. Verified: BRMS/BRPT/INKP now render genuine ranges.
+    - *Negative-IV display*: `view._fmt_intrinsic` renders a negative Sectors IV as blank
+      (never a bogus "−29,670" price); the DCF builder caption + `data_quality_flags`
+      warning carry the distress caveat. Relative comps (positive EV/EBITDA, P/E, P/B,
+      EV/Revenue) still chart fully — exactly the gold-standard "standalone value ≤ 0,
+      but relative valuation valid" treatment for over-levered-but-profitable names.
+    - *Capex anchors*: `assistant.capex_anchors(comp)` derives capex/EBITDA, capex/D&A,
+      capex/revenue, and fixed-asset turnover from the company's own audited
+      `historical_financials` (new `CompanyComp` fields: `capital_expenditure`,
+      `depreciation_amortization`, `fixed_assets`, `operating_cash_flow`, `free_cash_flow`,
+      `tax_expense`, `retained_earnings`; mapper now populates them). Surfaced as an
+      expander of benchmarks beside the capex input.
+    - *FCFF xlsx 3-statement model*: `write_dcf_sheet` rewritten to emit a full 12-column
+      per-year projection (Revenue→EBITDA→D&A→EBIT→Tax→NOPAT→Capex→ΔNWC→FCFF→Disc→PV),
+      seeded from FY0 audited data, with live Excel formulas mirroring
+      `run_dcf(use_fcff_buildup=True)` — the download now builds up FCFF from statements
+      instead of a single sales-margin line.
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon
