@@ -180,6 +180,41 @@ optional true-NAV (narrated, not built).
        (from `nwc_change_margin_from_days`) by revenue again, writing a ~1e-18 garbage
        cell. Renamed the param to `nwc_change_margin` and stopped re-dividing; added
        `tests/test_xlsx.py` asserting the cell equals the input margin verbatim.
+- **UI + data fixes — negative capex, IV rename, KPI card, logo, mining format**
+  (this session):
+  - **Negative capex** (`models/company_comp.py`, `assistant.py`): removed the `ge=0`
+    constraint on `capital_expenditure`/`depreciation_amortization` — Sectors reports capex
+    *net of disposals*, so PIPA shows a legitimate `-483,092,039` while still operating.
+    A negative capex no longer hard-crashes the ticker at the model layer; it is surfaced
+    as a non-fatal `data_quality_flags` warning ("negative capital expenditure …capex-based
+    benchmarks skipped") and `capex_anchors()` now skips all capex-numerator anchors
+    (capex/revenue, capex/EBITDA, capex/D&A, reinvestment rate) while keeping fixed-asset
+    turnover (revenue-based). EBITDA/revenue comps + DCF still run normally.
+  - **"Sectors IV" → "Sectors Intrinsic Value"** everywhere user-visible: `view.py` column
+    headers (comps + implied tables), `app.py` `NumberColumn` keys + captions + Styler
+    `.format()` dict key, and the football-field chart's Y-axis `FootballFieldRow` label.
+  - **EV/tonne comma separators**: the two `EV/tonne (reserves/resources)` columns were
+    formatted with `_MULTIPLE_FORMAT` (`%.2f`) — wrong for a *currency-per-tonne price*
+    (BYAN 94,410 → now `94,411`, PTBA 5,898 → `5,899`). Switched to `_PRICE_FORMAT` (`%,.0f`).
+  - **Mining explainer**: added a `st.expander` under the mining table defining
+    Resources vs Reserves (JORC/CRIRSCO: resources = in-ground occurrence Inferred→Measured;
+    reserves = economically extractable subset Probable→Proven, always ≤ resources),
+    Mt = megatonnes = 1,000,000 tonnes = 1B kg, and clarifying EV/tonne is a *relative
+    cross-check*, not a direct share-price or spot-coal-price translation.
+  - **KPI card redesign**: the `st.metric` in the Summary strip previously showed price
+    with a colored `delta` that was actually `(IV/price)−1` — visually indistinguishable
+    from a price-change ticker. Now the primary value is **Sectors Intrinsic Value** (labeled
+    `"{ticker} · Sectors Intrinsic Value"`), last close is a plain caption underneath, the
+    valuation gap is a plain-text caption (`"Upside to Sectors Intrinsic Value: +8.3%"`), and
+    `delta` is always `None` (no colored arrow). Falls back to a "Last close" only card when
+    IV is unavailable/negative.
+  - **Logo fix**: `.mimir-brand` `line-height` 1.0→1.2 + `padding-top` to stop ascender
+    clipping; the wordmark is now a `.mimir-wordmark` span colored `var(--accent)` (terracotta
+    `#d97757`) with a 3px accent underline via `inline-block` + `border-bottom`.
+  - **Tests**: added `test_company_comp.py` negative-capex case, `test_assistant.py`
+    negative-capex-skipped case; updated `test_football.py` to assert the renamed "Sectors
+    Intrinsic Value" row label. All 11 suites green.
+
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon

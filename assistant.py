@@ -159,6 +159,13 @@ def capex_anchors(comp) -> list[Suggestion]:
     rev = comp.revenue
     ebitda = comp.ebitda
     capex = comp.capital_expenditure
+    # Guard: a *negative* capex (company sold more fixed assets than it bought that
+    # FY — e.g. PIPA reports -483M while EBITDA is positive) cannot form a meaningful
+    # capex ratio. The company is still screenable on its EBITDA/revenue multiples and
+    # DCF; we simply skip the capex-based benchmarks rather than emit a nonsensical
+    # negative reinvestment figure. (Fixed-asset turnover uses revenue, not capex, so
+    # it remains valid and is computed below regardless.)
+    capex_nonnegative = capex is not None and capex > 0
     # D&A fallback: Sectors' raw ``depreciation`` is often null, but D&A ≈ EBITDA − EBIT
     # for a non-bank; use it so the capex/D&A anchor actually appears in practice.
     da = comp.depreciation_amortization
@@ -166,20 +173,20 @@ def capex_anchors(comp) -> list[Suggestion]:
         da = ebitda - comp.ebit
     fixed = comp.fixed_assets
 
-    if rev and capex:
+    if capex_nonnegative and rev:
         out.append(Suggestion(round(float(capex / rev), 4), f"capex / revenue — {src}"))
 
-    if ebitda and capex and ebitda > 0:
+    if capex_nonnegative and ebitda and ebitda > 0:
         out.append(Suggestion(round(float(capex / ebitda), 4), f"capex / EBITDA — {src}"))
 
-    if capex and da and da > 0:
+    if capex_nonnegative and da and da > 0:
         out.append(Suggestion(round(float(capex / da), 2), f"capex / D&A — {src}"))
 
     # Reinvestment rate (Damodaran): (capex + ΔNWC) / NOPAT, reported here as capex / NOPAT
     # (ΔNWC change isn't stored on the model, so the capex-only numerator is a defensible
     # simplification). NOPAT = EBIT − tax = EBIT × (1 − tax_rate). Only defined when EBIT is
     # positive (a negative-EBIT firm has no meaningful reinvestment rate).
-    if capex is not None and comp.ebit is not None and comp.ebit > 0:
+    if capex_nonnegative and comp.ebit is not None and comp.ebit > 0:
         ebit = float(comp.ebit)
         tax_exp = float(comp.tax_expense) if comp.tax_expense is not None else 0.0
         nopat = ebit - tax_exp if tax_exp < ebit else ebit * 0.78  # fallback 22% statutory tax

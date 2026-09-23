@@ -176,6 +176,30 @@ def main():
     assert any("negative Sectors intrinsic value" in f for f in neg_iv.data_quality_flags)
     print("PASS negative intrinsic value: flagged + excluded from upside, not a crash")
 
+    # 10c. Negative capital_expenditure (net of disposals — e.g. PIPA reports a
+    #     negative capex while EBITDA is positive) is accepted at the model layer (no
+    #     crash) and surfaced as a non-fatal data-quality flag rather than rejected
+    #     by a ge=0 constraint. The company stays screenable on its EBITDA/revenue
+    #     multiples.
+    neg_capex = CompanyComp(
+        ticker="PIPA.JK",
+        company_name="Pool Advista Indonesia",
+        sector="Financials",
+        market_cap=Decimal("1000"),
+        total_debt=Decimal("500"),
+        cash_and_equivalents=Decimal("100"),
+        revenue=Decimal("700"),
+        ebitda=Decimal("200"),
+        capital_expenditure=Decimal("-483092039"),
+        depreciation_amortization=Decimal("50"),
+    )
+    assert neg_capex.capital_expenditure == Decimal("-483092039")  # stored, not rejected
+    assert neg_capex.is_screenable is True  # still screenable on EV multiples
+    assert any(
+        "negative capital expenditure" in f for f in neg_capex.data_quality_flags
+    ), neg_capex.data_quality_flags
+    print("PASS negative capital expenditure: flagged, not a crash")
+
     # 10. ev_to_revenue / exclusion_reasons symmetry: missing revenue is now a
     #     first-class exclusion reason (previously only market_cap/ebitda were).
     no_revenue = CompanyComp(

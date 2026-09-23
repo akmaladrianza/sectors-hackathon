@@ -194,7 +194,7 @@ def build_football_field(
         rows.append(FootballFieldRow("DCF (FCFF)", fp, fp))
     if subject.intrinsic_value is not None and subject.intrinsic_value > 0:
         iv = float(subject.intrinsic_value)
-        rows.append(FootballFieldRow("Sectors IV", iv, iv))
+        rows.append(FootballFieldRow("Sectors Intrinsic Value", iv, iv))
 
     current = float(subject.price) if subject.price is not None else None
     _iv = (

@@ -60,7 +60,7 @@ def comps_rows(result: ScreenerResult) -> list[dict]:
                 "EV/Revenue": _fmt_multiple(c.ev_to_revenue),
                 "P/E": _fmt_multiple(c.pe_ratio),
                 "P/B": _fmt_multiple(c.price_to_book),
-                "Sectors IV": _fmt_intrinsic(c.intrinsic_value),
+                "Sectors Intrinsic Value": _fmt_intrinsic(c.intrinsic_value),
                 "Upside": _fmt_pct(c.intrinsic_upside),
             }
         )
@@ -142,7 +142,7 @@ def implied_valuation_rows(result: ScreenerResult) -> list[dict]:
                 "Current price": _fmt_price(current),
                 "Implied low": _fmt_price(low),
                 "Implied high": _fmt_price(high),
-                "Sectors IV": _fmt_price(c.intrinsic_value),
+                "Sectors Intrinsic Value": _fmt_price(c.intrinsic_value),
                 "Verdict": iv.verdict,
             }
         )

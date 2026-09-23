@@ -98,12 +98,12 @@ def test_football_field_adds_dcf_and_iv() -> None:
     )
     methods = [r.method for r in rows]
     assert "DCF (FCFF)" in methods
-    assert "Sectors IV" in methods
+    assert "Sectors Intrinsic Value" in methods
     assert current == 6500.0
     assert iv == 7000.0
     dcf_row = next(r for r in rows if r.method == "DCF (FCFF)")
     assert dcf_row.low == 5200.0 and dcf_row.high == 5200.0
-    print("PASS football field: DCF + Sectors IV single-point rows\n")
+    print("PASS football field: DCF + Sectors Intrinsic Value single-point rows\n")
 
 
 def test_working_capital_days() -> None:

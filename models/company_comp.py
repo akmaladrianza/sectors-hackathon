@@ -107,8 +107,15 @@ class CompanyComp(BaseModel):
     # reinvestment behaviour (capex/EBITDA, capex/D&A, reinvestment rate, fixed-asset
     # turnover) instead of a flat %-of-revenue assumption. Sectors supplies these in
     # ``historical_financials`` for most non-bank large caps.
-    capital_expenditure: Optional[Decimal] = Field(None, ge=0, description="Capital expenditure (latest FY)")
-    depreciation_amortization: Optional[Decimal] = Field(None, ge=0, description="Depreciation & amortization (latest FY)")
+    # NOTE: no ``ge=0`` here. Sectors reports ``capital_expenditure`` net of asset
+    # disposals, so a company that sold more fixed assets than it bought in a given
+    # FY legitimately shows a *negative* capex (e.g. PIPA: -483,092,039 while EBITDA
+    # is positive). Rejecting it would hard-crash the whole ticker at the model
+    # layer. A negative capex is instead surfaced as a non-fatal ``data_quality_flags``
+    # warning (mirroring the negative-intrinsic_value pattern) and skipped by the
+    # capex-based benchmark anchors — it never silently flows into a ratio.
+    capital_expenditure: Optional[Decimal] = Field(None, description="Capital expenditure (latest FY, net of disposals — can be negative)")
+    depreciation_amortization: Optional[Decimal] = Field(None, description="Depreciation & amortization (latest FY)")
     fixed_assets: Optional[Decimal] = Field(None, ge=0, description="Net fixed assets (latest FY)")
     operating_cash_flow: Optional[Decimal] = Field(None, description="Operating cash flow (latest FY)")
     free_cash_flow: Optional[Decimal] = Field(None, description="Free cash flow (latest FY)")
@@ -322,7 +329,9 @@ class CompanyComp(BaseModel):
         """
         flags: list[str] = []
         if self.intrinsic_value is not None and self.intrinsic_value < 0:
-            flags.append("negative Sectors intrinsic value (excluded from Sectors-IV comparison)")
+            flags.append("negative Sectors intrinsic value (excluded from Sectors-intrinsic-value comparison)")
+        if self.capital_expenditure is not None and self.capital_expenditure < 0:
+            flags.append("negative capital expenditure (net of disposals) — capex-based benchmarks skipped")
         return flags
 
     # --- Serialization: float semantics for Decimal monetary fields -------

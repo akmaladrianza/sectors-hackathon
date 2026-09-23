@@ -65,13 +65,16 @@ def _comps_column_config() -> dict:
         "EV/Revenue": NumberColumn(format=_MULTIPLE_FORMAT),
         "P/E": NumberColumn(format=_MULTIPLE_FORMAT),
         "P/B": NumberColumn(format=_MULTIPLE_FORMAT),
-        "Sectors IV": NumberColumn(format=_PRICE_FORMAT),
+        "Sectors Intrinsic Value": NumberColumn(format=_PRICE_FORMAT),
         "Current price": NumberColumn(format=_PRICE_FORMAT),
         "Implied low": NumberColumn(format=_PRICE_FORMAT),
         "Implied high": NumberColumn(format=_PRICE_FORMAT),
         "Upside": NumberColumn(format=_PCT_FORMAT),
-        "EV/tonne (reserves)": NumberColumn(format=_MULTIPLE_FORMAT),
-        "EV/tonne (resources)": NumberColumn(format=_MULTIPLE_FORMAT),
+        # EV/tonne is a *currency-per-tonne* price (tens of thousands to hundreds of
+        # thousands of IDR), not a small ratio like a multiple — so it takes the
+        # comma-separated price format, not the 2-decimal multiple format.
+        "EV/tonne (reserves)": NumberColumn(format=_PRICE_FORMAT),
+        "EV/tonne (resources)": NumberColumn(format=_PRICE_FORMAT),
         "Reserves (Mt)": NumberColumn(format="%,.2f"),
         "Resources (Mt)": NumberColumn(format="%,.2f"),
     }
@@ -114,11 +117,18 @@ st.markdown(
     .mimir-muted { color: var(--muted); font-size: 0.85rem; }
     .mimir-brand {
         text-align: right;
+        line-height: 1.2;
+        padding-top: 0.4rem;
+        margin-bottom: 0.2rem;
+    }
+    .mimir-wordmark {
+        display: inline-block;
         font-size: 2.6rem;
         font-weight: 700;
         letter-spacing: -0.03em;
-        color: var(--ink);
-        line-height: 1.0;
+        color: var(--accent);
+        padding-bottom: 0.15rem;
+        border-bottom: 3px solid var(--accent);
     }
     </style>
     """,
@@ -129,7 +139,7 @@ st.markdown(
 _c1, _c2 = st.columns([3, 1])
 with _c2:
     st.markdown(
-        "<div class='mimir-brand'>Mimir</div>"
+        "<div class='mimir-brand'><span class='mimir-wordmark'>Mimir</span></div>"
         "<div style='text-align:right'><span class='mimir-badge'>Comps · Mining · DCF</span></div>",
         unsafe_allow_html=True,
     )
@@ -240,6 +250,10 @@ if result is None:
     st.stop()
 
 # --- KPI summary strip (at-a-glance headline per subject) --------------------
+# The primary metric is **Sectors Intrinsic Value** (not the price), so the big
+# number can never be misread as a stock-ticker quote. The valuation gap is shown
+# as a plain-text caption ("Upside to Sectors Intrinsic Value: +8.3%") rather than a
+# colored st.metric delta, which would visually mimic a price-change widget.
 _kpi_comp = list(result.screenable) + [m.comp for m in result.miners]
 if _kpi_comp:
     st.subheader("Summary")
@@ -249,17 +263,27 @@ if _kpi_comp:
             _px = float(c.price) if c.price is not None else None
             _ups = float(c.intrinsic_upside * 100.0) if c.intrinsic_upside is not None else None
             _iv = float(c.intrinsic_value) if (c.intrinsic_value is not None and c.intrinsic_value > 0) else None
-            st.metric(
-                label=c.ticker,
-                value=f"{_px:,.0f}" if _px is not None else "—",
-                delta=f"{_ups:+.1f}%" if _ups is not None else None,
-                help=(
-                    f"Last close vs Sectors' intrinsic value {_iv:,.0f}"
-                    if _iv is not None
-                    else "Sectors intrinsic value unavailable or negative (distress flag)"
-                ),
-                border=True,
-            )
+            if _iv is not None:
+                st.metric(
+                    label=f"{c.ticker} · Sectors Intrinsic Value",
+                    value=f"{_iv:,.0f}",
+                    delta=None,
+                    help="Sectors' own disclosed fair-value estimate per share (Sectors-native, not our forecast).",
+                    border=True,
+                )
+                st.caption(
+                    f"Last close: {_px:,.0f}" if _px is not None else "Last close: —"
+                )
+                if _ups is not None:
+                    st.caption(f"Upside to Sectors Intrinsic Value: {_ups:+.1f}%")
+            else:
+                st.metric(
+                    label=f"{c.ticker} · Last close",
+                    value=f"{_px:,.0f}" if _px is not None else "—",
+                    delta=None,
+                    border=True,
+                )
+                st.caption("Sectors intrinsic value unavailable or negative (distress flag)")
 
 # --- Comps table -----------------------------------------------------------
 st.subheader("Comparable companies")
@@ -270,8 +294,8 @@ if not comps_df.empty:
         column_config=_comps_column_config(),
     )
     st.caption(
-        "**Sectors IV** = Sectors' own disclosed fair-value estimate per share. "
-        "**Upside** = (Sectors IV ÷ current price) − 1. Both are Sectors-native "
+        "**Sectors Intrinsic Value** = Sectors' own disclosed fair-value estimate per share. "
+        "**Upside** = (Sectors Intrinsic Value ÷ current price) − 1. Both are Sectors-native "
         "(not our own forecast). "
         f"Source: Sectors API ({date.today().isoformat()}). "
         f"{len(result.screenable)} non-mining peers."
@@ -308,7 +332,7 @@ elif not implied_df.empty:
     _styled = implied_df.style
     _styled = _styled.format(
         {"Current price": "{:,.0f}", "Implied low": "{:,.0f}",
-         "Implied high": "{:,.0f}", "Sectors IV": "{:,.0f}"},
+         "Implied high": "{:,.0f}", "Sectors Intrinsic Value": "{:,.0f}"},
         na_rep="—",
     )
     _styled = _styled.map(_verdict_style, subset=["Verdict"])
@@ -331,6 +355,25 @@ if result.miners:
         "Reserve figures are company self-reported (not independently audited) "
         "and carry a measurement-vintage year. Tonnage is Mt of ore, not metal content."
     )
+    with st.expander("ℹ️ Reading the mining numbers (Resources vs Reserves, Mt, EV/tonne)"):
+        st.markdown(
+            "**Mt = megatonnes = 1,000,000 tonnes**, and 1 tonne (metric ton) = 1,000 kg. "
+            "So BYAN's 2,031 Mt of reserves = **2.031 billion tonnes** of ore in the ground.\n\n"
+            "**Resources vs Reserves** (per the international JORC/CRIRSCO reporting standard "
+            "that Sectors' own fields follow):\n"
+            "- **Resources** = the in-ground mineral *believed to exist* with geological confidence "
+            "(subdivided Inferred → Indicated → Measured). This is the broadest, most speculative number.\n"
+            "- **Reserves** = the *subset* of Resources that has cleared the bar of being "
+            "**economically + technically extractable today** (Probable → Proven). "
+            "Reserves are therefore always ≤ Resources.\n\n"
+            "**EV/tonne** = enterprise value ÷ in-ground tonnage (a *currency-per-tonne* price). "
+            "It is a *relative cross-check* — \"how much is the market paying per tonne of ore\" — "
+            "NOT a direct input into share price or the spot coal price. A higher EV/tonne means the "
+            "market prices each tonne more richly (usually reflecting higher margins/coal quality, "
+            "not literally \"more expensive coal\"). The share price itself is market cap ÷ shares "
+            "outstanding; the Newcastle/ICI coal benchmark is a separate market quote this metric "
+            "does not encode."
+        )
 
 # --- Excluded peers ----------------------------------------------------------
 if result.excluded:
@@ -516,7 +559,7 @@ st.caption(
     "growth/ROE/margin-normalized implied prices from same-industry peers (sourced from "
     "Sectors, not the ticker list you typed), inverted via the subject's own figures "
     "— so a single outlier peer can't blow up the range. The ▲ marker is the current "
-    "price; DCF (Advanced mode) and Sectors IV are single-point methods. Informational, "
+    "price; DCF (Advanced mode) and Sectors Intrinsic Value are single-point methods. Informational, "
     "not a recommendation."
 )
 

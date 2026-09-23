@@ -120,6 +120,32 @@ def test_capex_anchors_no_data() -> None:
     print("PASS capex anchors empty when raw lines missing\n")
 
 
+def test_capex_anchors_negative_capex_skipped() -> None:
+    # A negative capex (net of disposals) cannot form a meaningful capex ratio — the
+    # capex-based anchors (capex/revenue, capex/EBITDA, capex/D&A, reinvestment rate)
+    # must be skipped, but fixed-asset turnover (revenue/debt-free fixed assets) is
+    # still valid and must remain.
+    comp = _comp(
+        revenue=Decimal("1000"),
+        ebitda=Decimal("250"),
+        ebit=Decimal("200"),
+        capital_expenditure=Decimal("-483092039"),
+        depreciation_amortization=Decimal("80"),
+        fixed_assets=Decimal("2000"),
+        tax_expense=Decimal("44"),
+    )
+    anchors = capex_anchors(comp)
+    terms = [a.source.split(" — ")[0] for a in anchors]
+    # All capex-numerator anchors suppressed.
+    assert not any(t.startswith("capex /") for t in terms), terms
+    assert not any("reinvestment rate" in t for t in terms), terms
+    # Fixed-asset turnover (revenue / fixed assets) survives: 1000 / 2000 = 0.5.
+    assert any("fixed-asset turnover" in t for t in terms), terms
+    fa = next(a for a in anchors if "fixed-asset turnover" in a.source)
+    assert round(float(fa.value), 2) == 0.5, fa.value
+    print(f"PASS negative capex: capex anchors skipped, turnover kept ({terms})\n")
+
+
 def test_capex_anchors_da_fallback_and_reinvestment_rate() -> None:
     # Sectors' raw depreciation is often None; D&A should fall back to EBITDA − EBIT,
     # and the reinvestment-rate anchor should fire from EBIT + tax.
