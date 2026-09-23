@@ -352,8 +352,7 @@ if advanced:
                     else:
                         st.caption(f"News: {ns.reason}")
 
-            # Curated (citation-safe) suggestions — now wired into the DCF below.
-            wc_sugg = assistant.suggest_working_capital(c)
+            # Curated (citation-safe) capex suggestion — now wired into the DCF below.
             capex_sugg = assistant.suggest_capex(c)
 
             # Percentage inputs below are presented in human "%" units: each stores
@@ -640,7 +639,7 @@ try:
                 depreciation=_dep,
                 tax_rate=_tax_rate,
                 capex=_capex,
-                nwc_change=_nw,
+                nwc_change_margin=_nw,
                 ar_days=_ar_d,
                 inv_days=_inv_d,
                 ap_days=_ap_d,

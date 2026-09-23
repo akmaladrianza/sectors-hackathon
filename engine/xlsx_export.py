@@ -42,7 +42,7 @@ def write_dcf_sheet(
     depreciation: Optional[Decimal] = None,
     tax_rate: Optional[Decimal] = None,
     capex: Optional[Decimal] = None,
-    nwc_change: Optional[Decimal] = None,
+    nwc_change_margin: Optional[Decimal] = None,
     ar_days: Optional[float] = None,
     inv_days: Optional[float] = None,
     ap_days: Optional[float] = None,
@@ -57,6 +57,11 @@ def write_dcf_sheet(
     Assumptions live in column B; the FY0 base values (revenue/EBITDA/D&A/tax/capex/NWC)
     are seeded from the company's own audited data where available, and every projection
     cell is a live Excel formula so assumption edits recompute in-place.
+
+    Units note: ``capex`` / ``depreciation`` / ``net_debt`` / ``shares_outstanding`` are
+    absolute amounts (converted to "of revenue" ratios in the sheet); ``nwc_change_margin``
+    and ``tax_rate`` are already fractions (ΔNWC ÷ revenue, e.g. ``-0.001``), matching
+    ``engine.dcf.nwc_change_margin_from_days`` and ``run_dcf`` — they are NOT re-divided.
     """
     from openpyxl.utils import get_column_letter
 
@@ -83,7 +88,7 @@ def write_dcf_sheet(
         ("AR days", ar_days),
         ("Inventory days", inv_days),
         ("AP days", ap_days),
-        ("ΔNWC (of revenue)", _d(nwc_change / revenue) if nwc_change is not None and revenue else None),
+        ("ΔNWC (of revenue)", _d(nwc_change_margin) if nwc_change_margin is not None else None),
         ("Discount rate (r)", _d(r)),
         ("Terminal growth", _d(tvg)),
         ("Net debt", _d(net_debt)),

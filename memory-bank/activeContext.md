@@ -160,6 +160,11 @@ optional true-NAV (narrated, not built).
       rows; the FCFE bridge references those cells (`=L26-$B$14`, `=L27/$B$15`) instead of
       burying the literals inside formula strings. Projection start row is now derived from
       the assumption-table length.
+     - **ΔNWC units bug fixed**: `write_dcf_sheet` had a double-division regression — it
+       treated `nwc_change` as a dollar amount and divided the *already-a-margin* value
+       (from `nwc_change_margin_from_days`) by revenue again, writing a ~1e-18 garbage
+       cell. Renamed the param to `nwc_change_margin` and stopped re-dividing; added
+       `tests/test_xlsx.py` asserting the cell equals the input margin verbatim.
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon
