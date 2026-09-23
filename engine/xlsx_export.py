@@ -43,7 +43,6 @@ def write_dcf_sheet(
     tax_rate: Optional[Decimal] = None,
     capex: Optional[Decimal] = None,
     nwc_change: Optional[Decimal] = None,
-    net_working_capital: Optional[Decimal] = None,
 ) -> None:
     """Write a formula-driven 3-statement-style FCFF build-up DCF onto a workbook.
 

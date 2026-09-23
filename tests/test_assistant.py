@@ -120,6 +120,31 @@ def test_capex_anchors_no_data() -> None:
     print("PASS capex anchors empty when raw lines missing\n")
 
 
+def test_capex_anchors_da_fallback_and_reinvestment_rate() -> None:
+    # Sectors' raw depreciation is often None; D&A should fall back to EBITDA − EBIT,
+    # and the reinvestment-rate anchor should fire from EBIT + tax.
+    comp = _comp(
+        revenue=Decimal("1000"),
+        ebitda=Decimal("400"),
+        ebit=Decimal("300"),
+        capital_expenditure=Decimal("120"),
+        depreciation_amortization=None,  # <-- forces the fallback -> D&A = 400-300 = 100
+        fixed_assets=Decimal("1000"),
+        tax_expense=Decimal("66"),
+    )
+    anchors = capex_anchors(comp)
+    terms = [a.source.split(" — ")[0] for a in anchors]
+    # D&A fallback -> capex / D&A = 120 / 100 = 1.2
+    assert any("capex / D&A" in t for t in terms), terms
+    da_anchor = next(a for a in anchors if "capex / D&A" in a.source)
+    assert round(float(da_anchor.value), 2) == 1.2, da_anchor.value
+    # Reinvestment rate = capex / NOPAT = 120 / (300 - 66) = 120/234 ≈ 0.51
+    assert any("reinvestment rate" in t for t in terms), terms
+    reinv = next(a for a in anchors if "reinvestment rate" in a.source)
+    assert round(float(reinv.value), 2) == round(120 / 234, 2), reinv.value
+    print(f"PASS capex anchors D&A fallback + reinvestment rate ({len(anchors)} anchors)\n")
+
+
 def main() -> None:
     test_mining_suggestions_are_cited()
     test_materials_bucket_is_not_mining()
@@ -129,6 +154,7 @@ def main() -> None:
     test_sectors_native_revenue_missing()
     test_capex_anchors_from_own_data()
     test_capex_anchors_no_data()
+    test_capex_anchors_da_fallback_and_reinvestment_rate()
     print("ALL ASSISTANT TESTS PASSED")
 
 

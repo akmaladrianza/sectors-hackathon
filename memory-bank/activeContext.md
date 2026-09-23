@@ -134,6 +134,16 @@ optional true-NAV (narrated, not built).
       seeded from FY0 audited data, with live Excel formulas mirroring
       `run_dcf(use_fcff_buildup=True)` — the download now builds up FCFF from statements
       instead of a single sales-margin line.
+  - **Capex-anchor completeness + minor polish** (this session):
+    - `assistant.capex_anchors` now falls back to `D&A ≈ EBITDA − EBIT` when Sectors'
+      raw `depreciation` is null (which it usually is), so the capex/D&A benchmark actually
+      appears. Guarded: only when `EBITDA > EBIT` (a negative implied D&A is a data
+      anomaly, never fabricated).
+    - Added the previously-documented-but-unimplemented **reinvestment rate** anchor
+      (`capex / NOPAT`, with `NOPAT = EBIT − tax`), fire only when EBIT > 0.
+    - The `data_quality_flags` warning banner in `app.py` now also covers `result.miners`
+      (previously only `screenable` non-miners).
+    - Removed the unused `net_working_capital` parameter from `write_dcf_sheet`.
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon

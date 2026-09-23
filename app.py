@@ -258,7 +258,8 @@ else:
     st.write("No screenable (non-mining) peers.")
 
 # --- Data-quality warnings (non-fatal, e.g. negative Sectors intrinsic value) ---
-_flagged = [c for c in result.screenable if c.data_quality_flags]
+_flag_all = list(result.screenable) + [m.comp for m in result.miners]
+_flagged = [c for c in _flag_all if c.data_quality_flags]
 for c in _flagged:
     for flag in c.data_quality_flags:
         st.warning(f"{c.ticker}: {flag}")

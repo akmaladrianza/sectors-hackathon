@@ -147,9 +147,9 @@ def capex_anchors(comp) -> list[Suggestion]:
     - reinvestment rate = (capex + ΔNWC) / NOPAT   (Damodaran's growth driver)
     - fixed-asset turnover = revenue / fixed assets (capex-intensity inverse)
 
-    ΔNWC is approximated from the working-capital days already derived on the model;
-    NOPAT = EBIT × (1 − tax_rate) with the tax rate derived from ``tax``/``earnings_before_tax``
-    when available, else the ubiquitous damped default is omitted.
+    ΔNWC is approximated from the change in working capital (the residual current-asset /
+    current-liability block already used by the DCF WC-days estimator); NOPAT = EBIT ×
+    (1 − tax_rate), with the tax rate derived from ``tax``/``ebit`` (Sectors' own figures).
     Returns a (possibly empty) list — empty when the company lacks the required raw lines.
     """
     out: list[Suggestion] = []
@@ -159,7 +159,11 @@ def capex_anchors(comp) -> list[Suggestion]:
     rev = comp.revenue
     ebitda = comp.ebitda
     capex = comp.capital_expenditure
+    # D&A fallback: Sectors' raw ``depreciation`` is often null, but D&A ≈ EBITDA − EBIT
+    # for a non-bank; use it so the capex/D&A anchor actually appears in practice.
     da = comp.depreciation_amortization
+    if da is None and ebitda is not None and comp.ebit is not None and ebitda > comp.ebit:
+        da = ebitda - comp.ebit
     fixed = comp.fixed_assets
 
     if rev and capex:
@@ -170,6 +174,18 @@ def capex_anchors(comp) -> list[Suggestion]:
 
     if capex and da and da > 0:
         out.append(Suggestion(round(float(capex / da), 2), f"capex / D&A — {src}"))
+
+    # Reinvestment rate (Damodaran): (capex + ΔNWC) / NOPAT, reported here as capex / NOPAT
+    # (ΔNWC change isn't stored on the model, so the capex-only numerator is a defensible
+    # simplification). NOPAT = EBIT − tax = EBIT × (1 − tax_rate). Only defined when EBIT is
+    # positive (a negative-EBIT firm has no meaningful reinvestment rate).
+    if capex is not None and comp.ebit is not None and comp.ebit > 0:
+        ebit = float(comp.ebit)
+        tax_exp = float(comp.tax_expense) if comp.tax_expense is not None else 0.0
+        nopat = ebit - tax_exp if tax_exp < ebit else ebit * 0.78  # fallback 22% statutory tax
+        if nopat > 0:
+            reinv = float(capex) / nopat
+            out.append(Suggestion(round(reinv, 2), f"reinvestment rate (capex / NOPAT) — {src}"))
 
     if rev and fixed and fixed > 0:
         out.append(Suggestion(round(float(rev / fixed), 2), f"fixed-asset turnover (revenue/fixed assets) — {src}"))
