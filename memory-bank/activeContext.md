@@ -214,6 +214,31 @@ optional true-NAV (narrated, not built).
   - **Tests**: added `test_company_comp.py` negative-capex case, `test_assistant.py`
     negative-capex-skipped case; updated `test_football.py` to assert the renamed "Sectors
     Intrinsic Value" row label. All 11 suites green.
+- **Header "?" tooltips + colored Over/Under/Fairly-valued label** (this session):
+  - **Header help-icons**: `_comps_column_config()` now sets `NumberColumn(help="…")` on
+    `Sectors Intrinsic Value`, `Implied low/high`, `Upside`, `EV/tonne (reserves/resources)`,
+    and `Reserves/Resources (Mt)` — Streamlit renders `help=` as a "?" tooltip icon on the
+    column header (confirmed via official docs). The mining tooltips carry the condensed
+    Resources⊇Reserves / Mt=1,000,000t / "relative cross-check, not a share/spot-price
+    translation" caveat (fuller text still lives in the mining `st.expander`).
+  - **Valuation label**: `view.py` gained `_valuation_label(upside)` +
+    `_valuation_result(upside)` with a **±5% materiality dead-zone** → "Undervalued" /
+    "Fairly valued" / "Overvalued" (matching the equity-research convention; user chose ±5%).
+    `comps_rows()` now emits a new string column `"Valuation"` = `"Undervalued (+8.3%)"` etc.,
+    **keeping** the raw numeric `"Upside"` column so no comparable detail is lost. The label
+    is colorized (Undervalued green `#1e8449`, Overvalued red `#c0392b`, Fairly valued muted
+    `#8a8578`) via a `pandas.Styler.map`, matching the existing implied-valuation Verdict palette.
+  - **Styler + column_config coexist**: the comps AND implied-valuation tables now pass a
+    `Styler` (for cell color) *and* `column_config` (for header tooltips + number formatting)
+    in the same `st.dataframe` call — column_config formatting takes precedence over the
+    Styler (confirmed in docs), so nothing regresses.
+  - **KPI caption color**: the Summary card's plain `st.caption("Upside …")` is now a colored
+    `st.markdown` span (`"Undervalued (+8.3% to Sectors Intrinsic Value)"`) using the same
+    palette — still a text label, not a `st.metric` delta, preserving the earlier "don't
+    mimic a price-change ticker" fix.
+  - **Tests**: `test_view.py` added `_valuation_label` threshold-boundary +
+    `_valuation_result` format + `comps_rows` "Valuation" field + None-IV cases. `app.py`
+    renders end-to-end via `AppTest` with no exception. All 11 suites green.
 
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode

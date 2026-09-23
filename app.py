@@ -59,24 +59,55 @@ from streamlit.column_config import NumberColumn  # noqa: E402
 
 
 def _comps_column_config() -> dict:
-    """Number formatting for the comps/implied tables (US comma separators)."""
+    """Number formatting + header tooltips for the comps/implied tables."""
     return {
         "EV/EBITDA": NumberColumn(format=_MULTIPLE_FORMAT),
         "EV/Revenue": NumberColumn(format=_MULTIPLE_FORMAT),
         "P/E": NumberColumn(format=_MULTIPLE_FORMAT),
         "P/B": NumberColumn(format=_MULTIPLE_FORMAT),
-        "Sectors Intrinsic Value": NumberColumn(format=_PRICE_FORMAT),
+        "Sectors Intrinsic Value": NumberColumn(
+            format=_PRICE_FORMAT,
+            help="Sectors' own disclosed fair-value estimate per share (Sectors-native, not our forecast).",
+        ),
         "Current price": NumberColumn(format=_PRICE_FORMAT),
-        "Implied low": NumberColumn(format=_PRICE_FORMAT),
-        "Implied high": NumberColumn(format=_PRICE_FORMAT),
-        "Upside": NumberColumn(format=_PCT_FORMAT),
+        "Implied low": NumberColumn(
+            format=_PRICE_FORMAT,
+            help="Low end of the *comps-derived* implied-price band (peer-median multiples, Sectors' own fair value excluded).",
+        ),
+        "Implied high": NumberColumn(
+            format=_PRICE_FORMAT,
+            help="High end of the *comps-derived* implied-price band (peer-median multiples, Sectors' own fair value excluded).",
+        ),
+        "Upside": NumberColumn(
+            format=_PCT_FORMAT,
+            help="(Sectors Intrinsic Value ÷ current price) − 1, as a signed percent.",
+        ),
         # EV/tonne is a *currency-per-tonne* price (tens of thousands to hundreds of
         # thousands of IDR), not a small ratio like a multiple — so it takes the
         # comma-separated price format, not the 2-decimal multiple format.
-        "EV/tonne (reserves)": NumberColumn(format=_PRICE_FORMAT),
-        "EV/tonne (resources)": NumberColumn(format=_PRICE_FORMAT),
-        "Reserves (Mt)": NumberColumn(format="%,.2f"),
-        "Resources (Mt)": NumberColumn(format="%,.2f"),
+        "EV/tonne (reserves)": NumberColumn(
+            format=_PRICE_FORMAT,
+            help="Enterprise value ÷ proven+probable *reserves* (Mt). A relative cross-check of "
+            "what the market pays per economically-extractable tonne of ore — not a direct input "
+            "into share price or the spot coal price.",
+        ),
+        "EV/tonne (resources)": NumberColumn(
+            format=_PRICE_FORMAT,
+            help="Enterprise value ÷ in-ground *resources* (Mt). Resources are the broader, less "
+            "certain mineral estimate (Resources ⊇ Reserves). Mt = megatonnes = 1,000,000 tonnes. "
+            "A relative cross-check, not a share-price or spot-price translation.",
+        ),
+        "Reserves (Mt)": NumberColumn(
+            format="%,.2f",
+            help="Proven + probable reserves in megatonnes (Mt). 1 Mt = 1,000,000 tonnes. "
+            "Reserves = the economically + technically extractable subset of Resources.",
+        ),
+        "Resources (Mt)": NumberColumn(
+            format="%,.2f",
+            help="In-ground mineral resources in megatonnes (Mt). 1 Mt = 1,000,000 tonnes. "
+            "Resources = the broader geological estimate (Inferred → Indicated → Measured); "
+            "Reserves are always a subset of Resources.",
+        ),
     }
 
 
@@ -249,11 +280,31 @@ if result is None:
         )
     st.stop()
 
+# --- Valuation label colors (shared by comps table, implied-valuation Verdict, KPI). ---
+# Undervalued = green, Overvalued = red, Fairly valued = muted.
+_VALUATION_COLORS = {
+    "Undervalued": "#1e8449",
+    "Overvalued": "#c0392b",
+    "Fairly valued": "#8a8578",
+}
+
+
+def _valuation_style(v):
+    """Cell CSS for a valuation label string like ``"Undervalued (+8.3%)"``."""
+    if v is None or not isinstance(v, str):
+        return None
+    label = v.split(" (")[0]
+    color = _VALUATION_COLORS.get(label)
+    if not color:
+        return None
+    return f"color: {color}; font-weight: 600;"
+
+
 # --- KPI summary strip (at-a-glance headline per subject) --------------------
 # The primary metric is **Sectors Intrinsic Value** (not the price), so the big
 # number can never be misread as a stock-ticker quote. The valuation gap is shown
-# as a plain-text caption ("Upside to Sectors Intrinsic Value: +8.3%") rather than a
-# colored st.metric delta, which would visually mimic a price-change widget.
+# as a colored *text* label ("Undervalued (+8.3% to Sectors Intrinsic Value)") rather
+# than a colored st.metric delta, which would visually mimic a price-change widget.
 _kpi_comp = list(result.screenable) + [m.comp for m in result.miners]
 if _kpi_comp:
     st.subheader("Summary")
@@ -261,7 +312,11 @@ if _kpi_comp:
     for _slot, c in zip(_kpi_cols, _kpi_comp):
         with _slot:
             _px = float(c.price) if c.price is not None else None
-            _ups = float(c.intrinsic_upside * 100.0) if c.intrinsic_upside is not None else None
+            _ups = (
+                float(c.intrinsic_upside * 100.0)
+                if c.intrinsic_upside is not None
+                else None
+            )
             _iv = float(c.intrinsic_value) if (c.intrinsic_value is not None and c.intrinsic_value > 0) else None
             if _iv is not None:
                 st.metric(
@@ -275,7 +330,13 @@ if _kpi_comp:
                     f"Last close: {_px:,.0f}" if _px is not None else "Last close: —"
                 )
                 if _ups is not None:
-                    st.caption(f"Upside to Sectors Intrinsic Value: {_ups:+.1f}%")
+                    _label = view._valuation_label(c.intrinsic_upside)
+                    _color = _VALUATION_COLORS.get(_label, "#8a8578")
+                    st.markdown(
+                        f"<span style='color: {_color}; font-weight: 600;'>"
+                        f"{_label} ({_ups:+.1f}% to Sectors Intrinsic Value)</span>",
+                        unsafe_allow_html=True,
+                    )
             else:
                 st.metric(
                     label=f"{c.ticker} · Last close",
@@ -289,14 +350,22 @@ if _kpi_comp:
 st.subheader("Comparable companies")
 comps_df = view.to_dataframe(result)
 if not comps_df.empty:
+    # Colorize the "Valuation" column via a Styler; pass column_config alongside so the
+    # header help-tooltips (and number formatting) still apply (column_config takes
+    # precedence over the Styler for text/number formatting).
+    _comps_styled = comps_df.style.map(_valuation_style, subset=["Valuation"])
+    _comps_styled = _comps_styled.format(
+        {"Sectors Intrinsic Value": "{:,.0f}"},
+        na_rep="—",
+    )
     st.dataframe(
-        comps_df, use_container_width=True, hide_index=True,
+        _comps_styled, use_container_width=True, hide_index=True,
         column_config=_comps_column_config(),
     )
     st.caption(
         "**Sectors Intrinsic Value** = Sectors' own disclosed fair-value estimate per share. "
-        "**Upside** = (Sectors Intrinsic Value ÷ current price) − 1. Both are Sectors-native "
-        "(not our own forecast). "
+        "**Upside** = (Sectors Intrinsic Value ÷ current price) − 1. **Valuation** = a "
+        "color-coded, informational label from that gap (±5% is treated as fairly valued). "
         f"Source: Sectors API ({date.today().isoformat()}). "
         f"{len(result.screenable)} non-mining peers."
     )
@@ -321,14 +390,11 @@ if len(result.screenable) + len(result.miners) < 2:
     )
 elif not implied_df.empty:
     def _verdict_style(v):
-        if v == "Overvalued":
-            return "color: #c0392b; font-weight: 600;"
-        if v == "Undervalued":
-            return "color: #1e8449; font-weight: 600;"
-        return "color: #8a8578;"
+        color = _VALUATION_COLORS.get(v)
+        return f"color: {color}; font-weight: 600;" if color else "color: #8a8578;"
 
-    # Stylers replace column_config, so apply number formatting here too (or the
-    # comma separators would be lost on this table).
+    # Styler applies the Verdict color; column_config is passed alongside so the header
+    # help-tooltips (and number formatting) still apply.
     _styled = implied_df.style
     _styled = _styled.format(
         {"Current price": "{:,.0f}", "Implied low": "{:,.0f}",
@@ -336,7 +402,10 @@ elif not implied_df.empty:
         na_rep="—",
     )
     _styled = _styled.map(_verdict_style, subset=["Verdict"])
-    st.dataframe(_styled, use_container_width=True, hide_index=True)
+    st.dataframe(
+        _styled, use_container_width=True, hide_index=True,
+        column_config=_comps_column_config(),
+    )
     st.caption(
         "Implied prices are peer-median-multiple inversions (excluding the subject) "
         "combined with Sectors' own intrinsic value. Verdict is informational only — "

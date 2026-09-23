@@ -45,6 +45,44 @@ def _fmt_intrinsic(v) -> Optional[float]:
     return round(float(v), 2)
 
 
+# Materiality dead-zone for the single-point valuation label: a ±5% gap between the
+# current price and Sectors' own intrinsic value is treated as "Fairly valued" rather
+# than flipping straight from Undervalued to Overvalued at exactly 0%. This is the
+# common equity-research materiality convention (5% either side of fair value is
+# within the noise of a point-in-time price vs a model estimate).
+_VALUATION_DEAD_ZONE = 0.05
+
+
+def _valuation_label(upside: Optional[float]) -> Optional[str]:
+    """Map a fractional upside (``(IV/price) - 1``) to an informational label.
+
+    Returns ``"Undervalued"`` / ``"Overvalued"`` / ``"Fairly valued"``, or ``None``
+    when the upside is unavailable (missing/negative intrinsic value) — the caller
+    renders that as blank, mirroring ``_fmt_intrinsic``. The ±5% dead-zone means a
+    small gap around fair value is not miscast as a convicted mispricing. Informational
+    only, never a buy/sell recommendation.
+    """
+    if upside is None:
+        return None
+    if upside > _VALUATION_DEAD_ZONE:
+        return "Undervalued"
+    if upside < -_VALUATION_DEAD_ZONE:
+        return "Overvalued"
+    return "Fairly valued"
+
+
+def _valuation_result(upside: Optional[float]) -> Optional[str]:
+    """A combined label + magnitude string for display, e.g. ``"Undervalued (+8.3%)"``.
+
+    Keeps the raw % visible (so the label never *hides* the number it replaces) while
+    making the over/under direction explicit and colorable.
+    """
+    label = _valuation_label(upside)
+    if label is None:
+        return None
+    return f"{label} ({upside * 100.0:+.1f}%)"
+
+
 def comps_rows(result: ScreenerResult) -> list[dict]:
     """Rows for the main comps table (screenable non-mining peers)."""
     rows = []
@@ -62,6 +100,7 @@ def comps_rows(result: ScreenerResult) -> list[dict]:
                 "P/B": _fmt_multiple(c.price_to_book),
                 "Sectors Intrinsic Value": _fmt_intrinsic(c.intrinsic_value),
                 "Upside": _fmt_pct(c.intrinsic_upside),
+                "Valuation": _valuation_result(c.intrinsic_upside),
             }
         )
     return rows
