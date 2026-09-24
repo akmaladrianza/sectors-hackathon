@@ -240,6 +240,27 @@ optional true-NAV (narrated, not built).
     `_valuation_result` format + `comps_rows` "Valuation" field + None-IV cases. `app.py`
     renders end-to-end via `AppTest` with no exception. All 11 suites green.
 
+- **BYAN/PTBA intrinsic-value discrepancy investigated + mining explainer removed**
+  (this session):
+  - **Root cause of the Sectors-website mismatch**: confirmed via a live API call that
+    Sectors own /company_report valuation.intrinsic_value field returns 10292 for
+    BYAN and 4850 for PTBA -- Mimir is displaying exactly what the API serves, not a
+    locally-computed number. The discrepancy vs the Sectors website (which shows No
+    data available for BYAN, and a DCF/Relative-Value/DDM breakdown of 11,066 / 2,945 /
+    6,075 for PTBA) is a Sectors-side inconsistency between their public APIs single
+    blended intrinsic_value figure and their websites multi-methodology valuation page
+    -- not a Mimir mapping/computation bug. Mimir has no visibility into which of the
+    websites three methodologies (or what blend) the APIs intrinsic_value corresponds
+    to; this is a genuine data-provenance limitation of the upstream API, not something
+    fixable in this codebase. Recommendation surfaced to the user: treat Sectors Intrinsic
+    Value as a single Sectors-native data point (already labelled and sourced as such),
+    not as equivalent to any one of the websites three methodologies.
+  - **Mining explainer expander removed**: the mining-numbers expander added last
+    session (Resources vs Reserves, Mt, EV per tonne caveats) was removed from app.py
+    per user request, since the same information is now covered by the column-header
+    question-mark tooltips added in the prior session. The short caption above the
+    mining table (self-reported reserves + measurement vintage) is unchanged.
+
 - **Product/market scoping session** (outside the codebase): name (Mimir, provisional),
   problem statement, audience, UI/output structure, mining overlay, two-mode
   (Simple/Advanced) valuation architecture, AI-assistant citation rule, and hackathon

@@ -424,25 +424,6 @@ if result.miners:
         "Reserve figures are company self-reported (not independently audited) "
         "and carry a measurement-vintage year. Tonnage is Mt of ore, not metal content."
     )
-    with st.expander("ℹ️ Reading the mining numbers (Resources vs Reserves, Mt, EV/tonne)"):
-        st.markdown(
-            "**Mt = megatonnes = 1,000,000 tonnes**, and 1 tonne (metric ton) = 1,000 kg. "
-            "So BYAN's 2,031 Mt of reserves = **2.031 billion tonnes** of ore in the ground.\n\n"
-            "**Resources vs Reserves** (per the international JORC/CRIRSCO reporting standard "
-            "that Sectors' own fields follow):\n"
-            "- **Resources** = the in-ground mineral *believed to exist* with geological confidence "
-            "(subdivided Inferred → Indicated → Measured). This is the broadest, most speculative number.\n"
-            "- **Reserves** = the *subset* of Resources that has cleared the bar of being "
-            "**economically + technically extractable today** (Probable → Proven). "
-            "Reserves are therefore always ≤ Resources.\n\n"
-            "**EV/tonne** = enterprise value ÷ in-ground tonnage (a *currency-per-tonne* price). "
-            "It is a *relative cross-check* — \"how much is the market paying per tonne of ore\" — "
-            "NOT a direct input into share price or the spot coal price. A higher EV/tonne means the "
-            "market prices each tonne more richly (usually reflecting higher margins/coal quality, "
-            "not literally \"more expensive coal\"). The share price itself is market cap ÷ shares "
-            "outstanding; the Newcastle/ICI coal benchmark is a separate market quote this metric "
-            "does not encode."
-        )
 
 # --- Excluded peers ----------------------------------------------------------
 if result.excluded:
